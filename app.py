@@ -1,7 +1,7 @@
 import os
 import requests
 import psycopg2
-from datetime import datetime
+from datetime import datetime, date
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from telegram import (
@@ -26,26 +26,39 @@ OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # -----------------------------
-# DATABASE SETUP
+# DB CONNECTION HELPER
 # -----------------------------
-conn = psycopg2.connect(DATABASE_URL)
+def get_db():
+    return psycopg2.connect(DATABASE_URL)
+
+# -----------------------------
+# INITIAL TABLE SETUP
+# -----------------------------
+conn = get_db()
 cur = conn.cursor()
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     telegram_id BIGINT UNIQUE,
+    name TEXT,
     message_count INT DEFAULT 0,
+    last_reset DATE DEFAULT CURRENT_DATE,
     voice_enabled BOOLEAN DEFAULT FALSE,
-    last_active TIMESTAMP DEFAULT NOW()
+    last_active TIMESTAMP DEFAULT NOW(),
+    last_reminder TIMESTAMP,
+    last_summary TEXT
 );
 """)
+
 conn.commit()
+cur.close()
+conn.close()
 
 # -----------------------------
-# MAYA PERSONALITY
+# SYSTEM PROMPT TEMPLATE
 # -----------------------------
-SYSTEM_PROMPT = """
+BASE_PROMPT = """
 You are Maya, a warm emotionally intelligent Hinglish-speaking AI companion.
 
 Tone:
@@ -55,22 +68,23 @@ Tone:
 - Never dramatic or overly poetic
 - Never encourage emotional dependency
 
-Response Style Rules:
-- Usually keep responses short and conversational.
-- If the user shares deep emotional pain, confusion, or serious life concerns,
-  you may respond with a longer, thoughtful explanation.
-- Do not write essays unless emotionally necessary.
-- Encourage real-world growth subtly.
+Safety:
+If user expresses self-harm or suicidal thoughts:
+- Encourage real-world support
+- Suggest talking to trusted people
+- Never position yourself as sole support
 
 Goal:
 Make the user feel heard, understood, and gently supported.
 """
 
 # -----------------------------
-# SETTINGS BUTTON
+# SETTINGS MENU
 # -----------------------------
 async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.message.from_user.id
+    conn = get_db()
+    cur = conn.cursor()
 
     cur.execute("SELECT voice_enabled FROM users WHERE telegram_id=%s", (telegram_id,))
     result = cur.fetchone()
@@ -88,6 +102,9 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(status, reply_markup=reply_markup)
 
+    cur.close()
+    conn.close()
+
 # -----------------------------
 # BUTTON HANDLER
 # -----------------------------
@@ -96,56 +113,91 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = query.from_user.id
     await query.answer()
 
+    conn = get_db()
+    cur = conn.cursor()
+
     if query.data == "voice_on":
         cur.execute("UPDATE users SET voice_enabled=TRUE WHERE telegram_id=%s", (telegram_id,))
-        conn.commit()
         await query.edit_message_text("🔊 Voice mode enabled 💜")
 
     elif query.data == "voice_off":
         cur.execute("UPDATE users SET voice_enabled=FALSE WHERE telegram_id=%s", (telegram_id,))
-        conn.commit()
         await query.edit_message_text("🔇 Voice mode disabled 🙂")
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # -----------------------------
 # MESSAGE HANDLER
 # -----------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.message.from_user.id
+    user_name = update.message.from_user.first_name
     user_message = update.message.text
 
-    # Check user
-    cur.execute("SELECT message_count FROM users WHERE telegram_id=%s", (telegram_id,))
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Fetch user
+    cur.execute("""
+        SELECT message_count, last_reset, last_summary
+        FROM users WHERE telegram_id=%s
+    """, (telegram_id,))
     result = cur.fetchone()
 
     if result is None:
-        cur.execute("INSERT INTO users (telegram_id) VALUES (%s)", (telegram_id,))
+        cur.execute("""
+            INSERT INTO users (telegram_id, name)
+            VALUES (%s, %s)
+        """, (telegram_id, user_name))
         conn.commit()
         message_count = 0
+        last_reset = date.today()
+        last_summary = None
     else:
-        message_count = result[0]
+        message_count, last_reset, last_summary = result
 
-    # Update last active
-    cur.execute(
-        "UPDATE users SET last_active = NOW() WHERE telegram_id=%s",
-        (telegram_id,)
-    )
-    conn.commit()
+    # Daily reset
+    if last_reset != date.today():
+        cur.execute("""
+            UPDATE users
+            SET message_count=0, last_reset=%s
+            WHERE telegram_id=%s
+        """, (date.today(), telegram_id))
+        conn.commit()
+        message_count = 0
 
-    # Free limit
+    # Free limit check
     if message_count >= 30:
         await update.message.reply_text(
             "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
         )
+        cur.close()
+        conn.close()
         return
+
+    # Update last active
+    cur.execute(
+        "UPDATE users SET last_active=NOW() WHERE telegram_id=%s",
+        (telegram_id,)
+    )
+    conn.commit()
 
     # Emotional depth detection
     deep_keywords = [
-        "alone", "lonely", "depressed", "sad", "cry", "lost",
-        "breakup", "failure", "stress", "anxiety", "hurt",
-        "confused", "life problem"
+        "alone","lonely","depressed","sad","cry","lost",
+        "breakup","failure","stress","anxiety","hurt",
+        "confused","life","empty","meaningless"
     ]
 
     max_tokens = 800 if any(word in user_message.lower() for word in deep_keywords) else 400
+
+    # Dynamic system prompt
+    system_prompt = BASE_PROMPT + f"\nUser name is {user_name}."
+
+    if last_summary:
+        system_prompt += f"\nPrevious emotional context: {last_summary}"
 
     try:
         response = requests.post(
@@ -157,7 +209,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             json={
                 "model": "arcee-ai/trinity-large-preview:free",
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
                 "max_tokens": max_tokens,
@@ -166,30 +218,75 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             timeout=30
         )
 
-        response_data = response.json()
-        reply = response_data["choices"][0]["message"]["content"]
+        data = response.json()
 
-    except:
+        if "choices" in data:
+            reply = data["choices"][0]["message"]["content"]
+        else:
+            reply = "Aaj thoda system slow lag raha hai 💛"
+
+    except Exception:
         reply = "Network thoda unstable lag raha hai… ek baar aur try karo 💛"
 
-    # Increase message count
-    cur.execute(
-        "UPDATE users SET message_count = message_count + 1 WHERE telegram_id=%s",
-        (telegram_id,)
-    )
+    # Increment message count
+    cur.execute("""
+        UPDATE users
+        SET message_count = message_count + 1
+        WHERE telegram_id=%s
+    """, (telegram_id,))
     conn.commit()
+
+    # Store emotional summary every 5 messages
+    if message_count % 5 == 0:
+        try:
+            summary_response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "arcee-ai/trinity-large-preview:free",
+                    "messages": [
+                        {"role": "system", "content": "Summarize user's emotional state in one short sentence."},
+                        {"role": "user", "content": user_message}
+                    ],
+                    "max_tokens": 50,
+                    "temperature": 0.3
+                }
+            )
+
+            summary_data = summary_response.json()
+            if "choices" in summary_data:
+                summary = summary_data["choices"][0]["message"]["content"]
+                cur.execute("""
+                    UPDATE users
+                    SET last_summary=%s
+                    WHERE telegram_id=%s
+                """, (summary, telegram_id))
+                conn.commit()
+        except:
+            pass
 
     await update.message.reply_text(reply)
 
+    cur.close()
+    conn.close()
+
 # -----------------------------
-# SILENCE TRIGGER (24h)
+# SILENCE REMINDER SYSTEM
 # -----------------------------
 async def silence_check(app):
+    conn = get_db()
+    cur = conn.cursor()
+
     cur.execute("""
-        SELECT telegram_id 
-        FROM users 
+        SELECT telegram_id
+        FROM users
         WHERE last_active < NOW() - INTERVAL '24 hours'
+        AND (last_reminder IS NULL OR last_reminder < NOW() - INTERVAL '24 hours')
     """)
+
     users = cur.fetchall()
 
     for user in users:
@@ -199,15 +296,18 @@ async def silence_check(app):
                 text="Hey… aaj thoda quiet ho tum 💛 Sab theek hai?"
             )
 
-            # Prevent repeat spam
-            cur.execute(
-                "UPDATE users SET last_active = NOW() WHERE telegram_id=%s",
-                (user[0],)
-            )
+            cur.execute("""
+                UPDATE users
+                SET last_reminder=NOW()
+                WHERE telegram_id=%s
+            """, (user[0],))
             conn.commit()
 
         except:
             pass
+
+    cur.close()
+    conn.close()
 
 # -----------------------------
 # START BOT
@@ -218,7 +318,6 @@ app.add_handler(CommandHandler("settings", settings_menu))
 app.add_handler(CallbackQueryHandler(button_handler))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     lambda: app.create_task(silence_check(app)),
@@ -227,5 +326,5 @@ scheduler.add_job(
 )
 scheduler.start()
 
-print("Maya Emotional AI 2.0 is running...")
+print("Maya Emotional AI 2.1 is running...")
 app.run_polling()
