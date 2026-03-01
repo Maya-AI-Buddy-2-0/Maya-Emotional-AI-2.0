@@ -90,6 +90,48 @@ def generate_memory_summary(user_message):
 
 
 # =============================
+# MOOD FUNCTIONS (EMOJI BASED)
+# =============================
+
+def detect_mood(user_message):
+    emoji_map = {
+        "😭": (2, "crying"),
+        "😢": (3, "sad"),
+        "😔": (4, "low"),
+        "😰": (3, "anxious"),
+        "😡": (2, "angry"),
+        "😤": (3, "frustrated"),
+        "😐": (5, "neutral"),
+        "🙂": (6, "okay"),
+        "😊": (7, "happy"),
+        "😄": (8, "very_happy"),
+        "🤩": (9, "excited"),
+        "😌": (7, "calm"),
+        "😴": (4, "tired")
+    }
+
+    for emoji, (score, label) in emoji_map.items():
+        if emoji in user_message:
+            return score, label
+
+    return None, None
+
+
+def save_mood(platform, platform_user_id, score, label):
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO mood_logs (platform, platform_user_id, mood_score, mood_label)
+        VALUES (%s, %s, %s, %s)
+    """, (platform, platform_user_id, score, label))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# =============================
 # MAIN REPLY FUNCTION
 # =============================
 
@@ -131,7 +173,33 @@ def generate_reply(platform, platform_user_id, name, user_message):
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
 
+    # =============================
+    # MOOD DETECTION
+    # =============================
+
+    score, label = detect_mood(user_message)
+
+    if score is not None:
+        save_mood(platform, platform_user_id, score, label)
+
+        # 💜 Optional UX Upgrade
+        if len(user_message.strip()) <= 2:
+            cur.execute("""
+                UPDATE users
+                SET message_count = message_count + 1,
+                    last_active = NOW()
+                WHERE platform=%s AND platform_user_id=%s
+            """, (platform, platform_user_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            return "Samajh gayi… aaj mood thoda off lag raha hai 💛 Baat karna chahoge?"
+
+    # =============================
     # FETCH MEMORY
+    # =============================
+
     memories = get_recent_memories(platform, platform_user_id)
     memory_context = ""
 
@@ -145,7 +213,10 @@ def generate_reply(platform, platform_user_id, name, user_message):
         + "\nRespond naturally."
     )
 
+    # =============================
     # AI CALL
+    # =============================
+
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -171,7 +242,10 @@ def generate_reply(platform, platform_user_id, name, user_message):
     except:
         reply = "Network issue… ek baar aur try karo 💛"
 
+    # =============================
     # UPDATE USER
+    # =============================
+
     cur.execute("""
         UPDATE users
         SET message_count = message_count + 1,
@@ -183,7 +257,10 @@ def generate_reply(platform, platform_user_id, name, user_message):
     cur.close()
     conn.close()
 
+    # =============================
     # SAVE MEMORY EVERY 5 MESSAGES
+    # =============================
+
     if (message_count + 1) % 5 == 0:
         memory_text = generate_memory_summary(user_message)
         if memory_text:
