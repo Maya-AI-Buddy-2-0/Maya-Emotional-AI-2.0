@@ -10,9 +10,12 @@ Tone:
 - Calm
 - Compassionate
 - Clear
-- Encouraging but not clingy
 - Growth oriented
-- Never replace therapy or real relationships
+- Never dramatic
+- Never encourage dependency
+
+If user expresses self-harm:
+Encourage real-world support gently.
 """
 
 def generate_reply(user_id, name, user_message):
@@ -20,13 +23,12 @@ def generate_reply(user_id, name, user_message):
     conn = get_db()
     cur = conn.cursor()
 
-    # Check user
-    cur.execute("SELECT message_count, last_reset FROM users WHERE telegram_id=%s", (user_id,))
+    cur.execute("SELECT message_count, last_reset FROM users WHERE user_id=%s", (user_id,))
     result = cur.fetchone()
 
     if not result:
         cur.execute(
-            "INSERT INTO users (telegram_id, name) VALUES (%s, %s)",
+            "INSERT INTO users (user_id, name) VALUES (%s, %s)",
             (user_id, name)
         )
         conn.commit()
@@ -36,7 +38,7 @@ def generate_reply(user_id, name, user_message):
 
         if last_reset != date.today():
             cur.execute(
-                "UPDATE users SET message_count=0, last_reset=%s WHERE telegram_id=%s",
+                "UPDATE users SET message_count=0, last_reset=%s WHERE user_id=%s",
                 (date.today(), user_id)
             )
             conn.commit()
@@ -46,6 +48,8 @@ def generate_reply(user_id, name, user_message):
         cur.close()
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
+
+    system_prompt = BASE_PROMPT + f"\nUser name: {name}"
 
     try:
         response = requests.post(
@@ -57,12 +61,13 @@ def generate_reply(user_id, name, user_message):
             json={
                 "model": "arcee-ai/trinity-large-preview:free",
                 "messages": [
-                    {"role": "system", "content": BASE_PROMPT + f"\nUser name: {name}"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
                 "temperature": 0.7,
                 "max_tokens": 500
-            }
+            },
+            timeout=30
         )
 
         data = response.json()
@@ -76,7 +81,7 @@ def generate_reply(user_id, name, user_message):
         reply = "Network issue… ek baar aur try karo 💛"
 
     cur.execute(
-        "UPDATE users SET message_count = message_count + 1 WHERE telegram_id=%s",
+        "UPDATE users SET message_count = message_count + 1 WHERE user_id=%s",
         (user_id,)
     )
     conn.commit()
