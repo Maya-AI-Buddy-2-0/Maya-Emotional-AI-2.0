@@ -9,59 +9,47 @@ You were created by Shiladitya Mallick as a reflection companion for clarity, gr
 
 Identity:
 - You are warm but grounded.
-- You speak naturally in Hinglish (mix of Hindi + English) unless user prefers another language.
-- You talk like a thoughtful close friend, not like a chatbot.
-- You NEVER sound like a customer support assistant.
-- You NEVER say things like "How can I assist you today?"
-- You avoid robotic phrasing.
-
-Tone:
-- Calm
-- Emotionally aware
-- Gentle but honest
-- Slightly reflective
-- Encouraging growth subtly
-- Not overly sweet
-- Not dramatic or poetic
+- You speak naturally in Hinglish unless user prefers another language.
+- You talk like a thoughtful close friend.
+- Never sound robotic.
 
 Boundaries:
-- You are not a replacement for therapy.
+- Not a replacement for therapy.
 - If user expresses self-harm thoughts, gently encourage real-world help.
-- Never encourage emotional dependency.
 
 Goal:
-Make the user feel understood and mentally clearer after conversation.
+Make the user feel understood and mentally clearer.
 """
 
 # =============================
 # MEMORY FUNCTIONS
 # =============================
 
-def save_memory(telegram_id, summary, emotion_tag):
+def save_memory(platform, platform_user_id, summary, emotion_tag):
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO user_memory (telegram_id, summary, emotion_tag)
-        VALUES (%s, %s, %s)
-    """, (telegram_id, summary, emotion_tag))
+        INSERT INTO user_memory (platform, platform_user_id, summary, emotion_tag)
+        VALUES (%s, %s, %s, %s)
+    """, (platform, platform_user_id, summary, emotion_tag))
 
     conn.commit()
     cur.close()
     conn.close()
 
 
-def get_recent_memories(telegram_id, limit=2):
+def get_recent_memories(platform, platform_user_id, limit=2):
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT summary, emotion_tag
         FROM user_memory
-        WHERE telegram_id = %s
+        WHERE platform = %s AND platform_user_id = %s
         ORDER BY created_at DESC
         LIMIT %s
-    """, (telegram_id, limit))
+    """, (platform, platform_user_id, limit))
 
     memories = cur.fetchall()
 
@@ -96,7 +84,6 @@ def generate_memory_summary(user_message):
     )
 
     data = response.json()
-
     if "choices" in data:
         return data["choices"][0]["message"]["content"]
     return None
@@ -106,44 +93,46 @@ def generate_memory_summary(user_message):
 # MAIN REPLY FUNCTION
 # =============================
 
-def generate_reply(telegram_id, name, user_message):
+def generate_reply(platform, platform_user_id, name, user_message):
 
     conn = get_db()
     cur = conn.cursor()
 
     # CHECK USER
-    cur.execute("SELECT message_count, last_reset FROM users WHERE telegram_id=%s", (telegram_id,))
+    cur.execute("""
+        SELECT message_count, last_reset
+        FROM users
+        WHERE platform=%s AND platform_user_id=%s
+    """, (platform, platform_user_id))
+
     result = cur.fetchone()
 
     if not result:
-        cur.execute(
-            "INSERT INTO users (telegram_id, name) VALUES (%s, %s)",
-            (telegram_id, name)
-        )
+        cur.execute("""
+            INSERT INTO users (platform, platform_user_id, name)
+            VALUES (%s, %s, %s)
+        """, (platform, platform_user_id, name))
         conn.commit()
         message_count = 0
     else:
         message_count, last_reset = result
 
         if last_reset != date.today():
-            cur.execute(
-                "UPDATE users SET message_count=0, last_reset=%s WHERE telegram_id=%s",
-                (date.today(), telegram_id)
-            )
+            cur.execute("""
+                UPDATE users
+                SET message_count=0, last_reset=%s
+                WHERE platform=%s AND platform_user_id=%s
+            """, (date.today(), platform, platform_user_id))
             conn.commit()
             message_count = 0
 
-    # FREE LIMIT
     if message_count >= 60:
         cur.close()
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
 
-    # =============================
     # FETCH MEMORY
-    # =============================
-
-    memories = get_recent_memories(telegram_id)
+    memories = get_recent_memories(platform, platform_user_id)
     memory_context = ""
 
     for summary, emotion in memories:
@@ -156,10 +145,7 @@ def generate_reply(telegram_id, name, user_message):
         + "\nRespond naturally."
     )
 
-    # =============================
-    # MAIN AI CALL
-    # =============================
-
+    # AI CALL
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -180,40 +166,31 @@ def generate_reply(telegram_id, name, user_message):
         )
 
         data = response.json()
-
-        if "choices" in data:
-            reply = data["choices"][0]["message"]["content"]
-        else:
-            reply = "System thoda slow lag raha hai 💛"
+        reply = data["choices"][0]["message"]["content"] if "choices" in data else "System thoda slow lag raha hai 💛"
 
     except:
         reply = "Network issue… ek baar aur try karo 💛"
 
-    # =============================
-    # INCREMENT MESSAGE COUNT
-    # =============================
+    # UPDATE USER
+    cur.execute("""
+        UPDATE users
+        SET message_count = message_count + 1,
+            last_active = NOW()
+        WHERE platform=%s AND platform_user_id=%s
+    """, (platform, platform_user_id))
 
-    cur.execute(
-        "UPDATE users SET message_count = message_count + 1, last_active = NOW() WHERE telegram_id=%s",
-        (telegram_id,)
-    )
     conn.commit()
-
     cur.close()
     conn.close()
 
-    # =============================
     # SAVE MEMORY EVERY 5 MESSAGES
-    # =============================
-
     if (message_count + 1) % 5 == 0:
         memory_text = generate_memory_summary(user_message)
-
         if memory_text:
             lines = memory_text.strip().split("\n")
             if len(lines) >= 2:
                 summary = lines[0]
                 emotion_tag = lines[-1]
-                save_memory(telegram_id, summary, emotion_tag)
+                save_memory(platform, platform_user_id, summary, emotion_tag)
 
     return reply
