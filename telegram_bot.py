@@ -1,7 +1,7 @@
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 from telegram import Update
-from core.config import BOT_TOKEN
-from core.maya_engine import generate_reply
+from config import BOT_TOKEN
+from maya_engine import generate_reply
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
