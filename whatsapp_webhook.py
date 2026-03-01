@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from core.config import WHATSAPP_VERIFY_TOKEN
 from core.maya_engine import generate_reply
+from core.config import WHATSAPP_VERIFY_TOKEN
 
 app = Flask(__name__)
 
@@ -17,8 +17,7 @@ def verify():
 def receive_message():
     data = request.json
 
-    # parse incoming WhatsApp data properly later
-    # placeholder logic
+    # TODO: parse AiSensy payload properly
 
     user_id = "whatsapp_user"
     name = "User"
@@ -26,8 +25,8 @@ def receive_message():
 
     reply = generate_reply(user_id, name, message)
 
-    return jsonify({"status": "received"})
-    
+    return jsonify({"status": "ok"})
+
 def start():
     print("WhatsApp webhook running...")
     app.run(host="0.0.0.0", port=5000)
