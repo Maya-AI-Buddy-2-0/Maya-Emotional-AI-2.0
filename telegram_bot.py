@@ -21,7 +21,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================
-# SILENCE DETECTION JOB
+# SILENCE DETECTION (48h)
 # =============================
 
 async def silence_check(context: ContextTypes.DEFAULT_TYPE):
@@ -34,7 +34,7 @@ async def silence_check(context: ContextTypes.DEFAULT_TYPE):
     cur.execute("""
         SELECT platform_user_id
         FROM users
-        WHERE platform = 'telegram'
+        WHERE platform='telegram'
         AND last_active < %s
     """, (threshold,))
 
@@ -47,14 +47,83 @@ async def silence_check(context: ContextTypes.DEFAULT_TYPE):
                 text="Hey… thoda quiet ho gaye ho. Sab theek hai? 💛"
             )
 
-            # Prevent spam — update last_active
+            # Update to prevent repeated reminders
             cur.execute("""
                 UPDATE users
                 SET last_active = NOW()
-                WHERE platform='telegram' AND platform_user_id=%s
+                WHERE platform='telegram'
+                AND platform_user_id=%s
             """, (user_id,))
             conn.commit()
 
+        except:
+            pass
+
+    cur.close()
+    conn.close()
+
+
+# =============================
+# WEEKLY MOOD SUMMARY
+# =============================
+
+async def weekly_mood_summary(context: ContextTypes.DEFAULT_TYPE):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    one_week_ago = datetime.utcnow() - timedelta(days=7)
+
+    # Find users with mood logs this week
+    cur.execute("""
+        SELECT DISTINCT platform_user_id
+        FROM mood_logs
+        WHERE platform='telegram'
+        AND created_at >= %s
+    """, (one_week_ago,))
+
+    users = cur.fetchall()
+
+    for (user_id,) in users:
+
+        cur.execute("""
+            SELECT mood_score, mood_label
+            FROM mood_logs
+            WHERE platform='telegram'
+            AND platform_user_id=%s
+            AND created_at >= %s
+        """, (user_id, one_week_ago))
+
+        moods = cur.fetchall()
+
+        if not moods:
+            continue
+
+        scores = [m[0] for m in moods if m[0] is not None]
+        labels = [m[1] for m in moods if m[1] is not None]
+
+        if not scores:
+            continue
+
+        avg_mood = round(sum(scores) / len(scores), 1)
+        most_common = max(set(labels), key=labels.count) if labels else "mixed"
+
+        message = (
+            "📊 Weekly Reflection 💛\n\n"
+            f"This week you logged {len(scores)} mood check-ins.\n"
+            f"Average mood: {avg_mood}/10\n"
+            f"Most common feeling: {most_common}\n\n"
+        )
+
+        if avg_mood <= 4:
+            message += "Lagta hai week thoda heavy tha… baat karna chahoge?"
+        elif avg_mood <= 6:
+            message += "Mixed week lag raha hai. Kuch ups and downs the."
+        else:
+            message += "Overall positive week tha ✨ Keep going."
+
+        try:
+            await context.bot.send_message(chat_id=user_id, text=message)
         except:
             pass
 
@@ -71,8 +140,11 @@ def start():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Run silence check every 6 hours
+    # Silence check every 6 hours
     app.job_queue.run_repeating(silence_check, interval=21600, first=60)
+
+    # Weekly mood summary (7 days)
+    app.job_queue.run_repeating(weekly_mood_summary, interval=604800, first=120)
 
     print("Telegram bot running...")
     app.run_polling(drop_pending_updates=True)
