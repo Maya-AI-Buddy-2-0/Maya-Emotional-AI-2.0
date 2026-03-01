@@ -1,5 +1,5 @@
-from core.config import CHANNEL
-from core.db import init_db
+from config import CHANNEL
+from db import init_db
 
 init_db()
 
