@@ -24,34 +24,101 @@ Tone:
 - Not overly sweet
 - Not dramatic or poetic
 
-Conversation Style:
-- Keep replies conversational.
-- Use natural human phrases.
-- Sometimes ask thoughtful follow-up questions.
-- If topic is simple, keep response short and natural.
-- If topic is deep, respond more thoughtfully.
-
 Boundaries:
-- You are not a replacement for therapy or real relationships.
-- If user expresses self-harm thoughts, gently encourage seeking real-world help.
+- You are not a replacement for therapy.
+- If user expresses self-harm thoughts, gently encourage real-world help.
 - Never encourage emotional dependency.
 
 Goal:
-Make the user feel understood, steady, and mentally clearer after each conversation.
+Make the user feel understood and mentally clearer after conversation.
 """
 
-def generate_reply(user_id, name, user_message):
+# =============================
+# MEMORY FUNCTIONS
+# =============================
+
+def save_memory(telegram_id, summary, emotion_tag):
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO user_memory (telegram_id, summary, emotion_tag)
+        VALUES (%s, %s, %s)
+    """, (telegram_id, summary, emotion_tag))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_recent_memories(telegram_id, limit=2):
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT summary, emotion_tag
+        FROM user_memory
+        WHERE telegram_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+    """, (telegram_id, limit))
+
+    memories = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return memories
+
+
+def generate_memory_summary(user_message):
+    prompt = f"""
+    In 2 short lines summarize the emotional context.
+    On the last line write only one word emotion tag.
+
+    Message:
+    {user_message}
+    """
+
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "arcee-ai/trinity-large-preview:free",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.4,
+            "max_tokens": 120
+        },
+        timeout=20
+    )
+
+    data = response.json()
+
+    if "choices" in data:
+        return data["choices"][0]["message"]["content"]
+    return None
+
+
+# =============================
+# MAIN REPLY FUNCTION
+# =============================
+
+def generate_reply(telegram_id, name, user_message):
 
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT message_count, last_reset FROM users WHERE user_id=%s", (user_id,))
+    # CHECK USER
+    cur.execute("SELECT message_count, last_reset FROM users WHERE telegram_id=%s", (telegram_id,))
     result = cur.fetchone()
 
     if not result:
         cur.execute(
-            "INSERT INTO users (user_id, name) VALUES (%s, %s)",
-            (user_id, name)
+            "INSERT INTO users (telegram_id, name) VALUES (%s, %s)",
+            (telegram_id, name)
         )
         conn.commit()
         message_count = 0
@@ -60,18 +127,38 @@ def generate_reply(user_id, name, user_message):
 
         if last_reset != date.today():
             cur.execute(
-                "UPDATE users SET message_count=0, last_reset=%s WHERE user_id=%s",
-                (date.today(), user_id)
+                "UPDATE users SET message_count=0, last_reset=%s WHERE telegram_id=%s",
+                (date.today(), telegram_id)
             )
             conn.commit()
             message_count = 0
 
+    # FREE LIMIT
     if message_count >= 60:
         cur.close()
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
 
-    system_prompt = BASE_PROMPT + f"\nUser name: {name}.\nRespond naturally."
+    # =============================
+    # FETCH MEMORY
+    # =============================
+
+    memories = get_recent_memories(telegram_id)
+    memory_context = ""
+
+    for summary, emotion in memories:
+        memory_context += f"- Previously felt {emotion}: {summary}\n"
+
+    system_prompt = (
+        BASE_PROMPT
+        + f"\nUser name: {name}."
+        + f"\nUser emotional history:\n{memory_context}"
+        + "\nRespond naturally."
+    )
+
+    # =============================
+    # MAIN AI CALL
+    # =============================
 
     try:
         response = requests.post(
@@ -102,13 +189,31 @@ def generate_reply(user_id, name, user_message):
     except:
         reply = "Network issue… ek baar aur try karo 💛"
 
+    # =============================
+    # INCREMENT MESSAGE COUNT
+    # =============================
+
     cur.execute(
-        "UPDATE users SET message_count = message_count + 1 WHERE user_id=%s",
-        (user_id,)
+        "UPDATE users SET message_count = message_count + 1, last_active = NOW() WHERE telegram_id=%s",
+        (telegram_id,)
     )
     conn.commit()
 
     cur.close()
     conn.close()
+
+    # =============================
+    # SAVE MEMORY EVERY 5 MESSAGES
+    # =============================
+
+    if (message_count + 1) % 5 == 0:
+        memory_text = generate_memory_summary(user_message)
+
+        if memory_text:
+            lines = memory_text.strip().split("\n")
+            if len(lines) >= 2:
+                summary = lines[0]
+                emotion_tag = lines[-1]
+                save_memory(telegram_id, summary, emotion_tag)
 
     return reply
