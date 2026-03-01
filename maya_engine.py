@@ -66,7 +66,7 @@ def generate_reply(user_id, name, user_message):
             conn.commit()
             message_count = 0
 
-    if message_count >= 30:
+    if message_count >= 60:
         cur.close()
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
