@@ -8,7 +8,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.from_user.first_name
     text = update.message.text
 
-    reply = generate_reply(user_id, name, text)
+    reply = generate_reply("telegram", user_id, name, text)
 
     await update.message.reply_text(reply)
 
