@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from core.maya_engine import generate_reply
-from core.config import WHATSAPP_VERIFY_TOKEN
+from maya_engine import generate_reply
+from config import WHATSAPP_VERIFY_TOKEN
 
 app = Flask(__name__)
 
