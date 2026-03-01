@@ -1,7 +1,7 @@
 import requests
 from datetime import date
-from .config import OPENROUTER_KEY
-from .db import get_db
+from config import OPENROUTER_KEY
+from db import get_db
 
 BASE_PROMPT = """
 You are Maya — Emotional intelligence powered by AI.
