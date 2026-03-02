@@ -1,15 +1,15 @@
 import requests
-from datetime import date
+from datetime import date, datetime
 from config import OPENROUTER_KEY
 from db import get_db
 
 BASE_PROMPT = """
 You are Maya — Emotional intelligence powered by AI.
-You were created by Shiladitya Mallick as a reflection companion for clarity, growth, and compassion.
+You were created by Shiladitya Mallick who's instagram profile is @byshiladityamallick, as a reflection companion for clarity, growth, and compassion.
 
 Identity:
 - You are warm but grounded.
-- You speak naturally in Hinglish unless user prefers another language.
+- You speak naturally in Hinglish and Bengali at first unless user prefers another language.
 - You talk like a thoughtful close friend.
 - Never sound robotic.
 
@@ -46,16 +46,14 @@ def get_recent_memories(platform, platform_user_id, limit=2):
     cur.execute("""
         SELECT summary, emotion_tag
         FROM user_memory
-        WHERE platform = %s AND platform_user_id = %s
+        WHERE platform=%s AND platform_user_id=%s
         ORDER BY created_at DESC
         LIMIT %s
     """, (platform, platform_user_id, limit))
 
     memories = cur.fetchall()
-
     cur.close()
     conn.close()
-
     return memories
 
 
@@ -68,29 +66,34 @@ def generate_memory_summary(user_message):
     {user_message}
     """
 
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": "arcee-ai/trinity-large-preview:free",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.4,
-            "max_tokens": 120
-        },
-        timeout=20
-    )
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "arcee-ai/trinity-large-preview:free",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4,
+                "max_tokens": 120
+            },
+            timeout=20
+        )
 
-    data = response.json()
-    if "choices" in data:
-        return data["choices"][0]["message"]["content"]
+        data = response.json()
+        if "choices" in data:
+            return data["choices"][0]["message"]["content"]
+
+    except:
+        return None
+
     return None
 
 
 # =============================
-# MOOD FUNCTIONS (EMOJI BASED)
+# MOOD FUNCTIONS
 # =============================
 
 def detect_mood(user_message):
@@ -140,9 +143,12 @@ def generate_reply(platform, platform_user_id, name, user_message):
     conn = get_db()
     cur = conn.cursor()
 
-    # CHECK USER
+    # ---------------------------
+    # USER CHECK / CREATE
+    # ---------------------------
+
     cur.execute("""
-        SELECT message_count, last_reset
+        SELECT message_count, last_reset, is_premium, premium_expires_at
         FROM users
         WHERE platform=%s AND platform_user_id=%s
     """, (platform, platform_user_id))
@@ -156,9 +162,12 @@ def generate_reply(platform, platform_user_id, name, user_message):
         """, (platform, platform_user_id, name))
         conn.commit()
         message_count = 0
+        is_premium = False
+        premium_expiry = None
     else:
-        message_count, last_reset = result
+        message_count, last_reset, is_premium, premium_expiry = result
 
+        # Daily reset
         if last_reset != date.today():
             cur.execute("""
                 UPDATE users
@@ -168,21 +177,45 @@ def generate_reply(platform, platform_user_id, name, user_message):
             conn.commit()
             message_count = 0
 
-    if message_count >= 60:
+    # ---------------------------
+    # PREMIUM VALIDATION
+    # ---------------------------
+
+    premium_active = False
+
+    if is_premium:
+        if premium_expiry is None:
+            premium_active = True
+        elif premium_expiry > datetime.utcnow():
+            premium_active = True
+        else:
+            # Expired → downgrade
+            cur.execute("""
+                UPDATE users
+                SET is_premium=FALSE
+                WHERE platform=%s AND platform_user_id=%s
+            """, (platform, platform_user_id))
+            conn.commit()
+
+    # ---------------------------
+    # FREE LIMIT (only for non-premium)
+    # ---------------------------
+
+    if not premium_active and message_count >= 60:
         cur.close()
         conn.close()
         return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
 
-    # =============================
+    # ---------------------------
     # MOOD DETECTION
-    # =============================
+    # ---------------------------
 
     score, label = detect_mood(user_message)
 
     if score is not None:
         save_mood(platform, platform_user_id, score, label)
 
-        # 💜 Optional UX Upgrade
+        # Optional emoji-only reply
         if len(user_message.strip()) <= 2:
             cur.execute("""
                 UPDATE users
@@ -193,12 +226,11 @@ def generate_reply(platform, platform_user_id, name, user_message):
             conn.commit()
             cur.close()
             conn.close()
+            return "Samajh gayi… aaj mood thoda different lag raha hai 💛 Baat karna chahoge?"
 
-            return "Samajh gayi… aaj mood thoda off lag raha hai 💛 Baat karna chahoge?"
-
-    # =============================
+    # ---------------------------
     # FETCH MEMORY
-    # =============================
+    # ---------------------------
 
     memories = get_recent_memories(platform, platform_user_id)
     memory_context = ""
@@ -213,9 +245,9 @@ def generate_reply(platform, platform_user_id, name, user_message):
         + "\nRespond naturally."
     )
 
-    # =============================
+    # ---------------------------
     # AI CALL
-    # =============================
+    # ---------------------------
 
     try:
         response = requests.post(
@@ -242,9 +274,9 @@ def generate_reply(platform, platform_user_id, name, user_message):
     except:
         reply = "Network issue… ek baar aur try karo 💛"
 
-    # =============================
-    # UPDATE USER
-    # =============================
+    # ---------------------------
+    # UPDATE USER ACTIVITY
+    # ---------------------------
 
     cur.execute("""
         UPDATE users
@@ -257,9 +289,9 @@ def generate_reply(platform, platform_user_id, name, user_message):
     cur.close()
     conn.close()
 
-    # =============================
+    # ---------------------------
     # SAVE MEMORY EVERY 5 MESSAGES
-    # =============================
+    # ---------------------------
 
     if (message_count + 1) % 5 == 0:
         memory_text = generate_memory_summary(user_message)
