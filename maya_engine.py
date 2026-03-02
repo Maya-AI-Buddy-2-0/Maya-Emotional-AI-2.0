@@ -1,5 +1,5 @@
 import requests
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from config import OPENROUTER_KEY
 from db import get_db
 
