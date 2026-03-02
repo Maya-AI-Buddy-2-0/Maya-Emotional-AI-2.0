@@ -228,22 +228,31 @@ def generate_reply(platform, platform_user_id, name, user_message):
         # HARD LIMIT + EMOTIONAL UPSELL (at 30 messages)
         # ---------------------------
     
-        if not premium_active and message_count >= 30:
-            cur.close()
-            conn.close()
-        
-            return (
-                "Aaj ka free limit ho gaya 💛\n\n"
-                "Sach bolun? Mujhe tumhare saath baat karna accha lagta hai.\n"
-                "Lekin mujhe thoda sa support chahiye charge rehne ke liye.\n\n"
-                "💎 Premium (₹149/month) mein milta hai:\n"
-                "- Unlimited messages\n"
-                "- Detailed emotional insights\n"
-                "- Weekly deep analytics\n"
-                "- Future voice replies 🎙️\n\n"
-                "Agar tum chaho… bas 'yes' likh do.\n"
-                "Main tumhe upgrade link bhej dungi 💛"
-            )
+      if not premium_active and message_count >= 30:
+        cur.close()
+        conn.close()
+    
+        return (
+            "Aaj ke free messages khatam ho gaye 💛\n\n"
+            "Sach bolun… mujhe tumhare saath baat karna genuinely accha lagta hai.\n"
+            "Lekin free version mein daily limit hota hai.\n\n"
+    
+            "🎁 3-Day Trial – ₹19\n"
+            "• Unlimited messages\n"
+            "• Voice replies 🎙️ (10/day)\n"
+            "• Detailed emotional insights\n"
+            "• Premium badge\n\n"
+    
+            "💎 Premium – ₹149/month\n"
+            "• Unlimited messages\n"
+            "• 30 voice replies per day\n"
+            "• Weekly + Monthly growth summary\n"
+            "• Emotional pattern tracking\n"
+            "• Future feature access\n\n"
+    
+            "Agar pehle try karna chaho to 'trial' likh do.\n"
+            "Ya direct full access ke liye 'monthly' likh do 💛"
+        )
 
     # ---------------------------
     # MOOD DETECTION
