@@ -30,6 +30,7 @@ def init_db():
         premium_expires_at TIMESTAMP,
         trial_used BOOLEAN DEFAULT FALSE,
         trial_expiry_notified BOOLEAN DEFAULT FALSE,
+        subscription_type TEXT,
 
         UNIQUE(platform, platform_user_id)
     );
