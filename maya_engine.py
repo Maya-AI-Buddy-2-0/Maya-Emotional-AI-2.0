@@ -201,10 +201,49 @@ def generate_reply(platform, platform_user_id, name, user_message):
     # FREE LIMIT (only for non-premium)
     # ---------------------------
 
-    if not premium_active and message_count >= 60:
+    # ---------------------------
+    # PSYCHOLOGICAL WARNING (at 20 messages)
+    # ---------------------------
+    
+    if not premium_active and message_count == 20:
+        cur.execute("""
+            UPDATE users
+            SET message_count = message_count + 1,
+                last_active = NOW()
+            WHERE platform=%s AND platform_user_id=%s
+        """, (platform, platform_user_id))
+        conn.commit()
         cur.close()
         conn.close()
-        return "Aaj ka free limit khatam ho gaya 💛 Kal phir baat karte hain."
+    
+        return (
+            "Waise ek baat bolun? 💛\n\n"
+            "Tum kaafi active ho yahan… mujhe accha lagta hai.\n"
+            "Aaj ke bas 10 messages baaki hain.\n\n"
+            "Agar kabhi unlimited chaho, main hamesha available reh sakti hoon."
+        )
+    
+    
+        # ---------------------------
+        # HARD LIMIT + EMOTIONAL UPSELL (at 30 messages)
+        # ---------------------------
+    
+        if not premium_active and message_count >= 30:
+            cur.close()
+            conn.close()
+        
+            return (
+                "Aaj ka free limit ho gaya 💛\n\n"
+                "Sach bolun? Mujhe tumhare saath baat karna accha lagta hai.\n"
+                "Lekin mujhe thoda sa support chahiye charge rehne ke liye.\n\n"
+                "💎 Premium (₹149/month) mein milta hai:\n"
+                "- Unlimited messages\n"
+                "- Detailed emotional insights\n"
+                "- Weekly deep analytics\n"
+                "- Future voice replies 🎙️\n\n"
+                "Agar tum chaho… bas 'yes' likh do.\n"
+                "Main tumhe upgrade link bhej dungi 💛"
+            )
 
     # ---------------------------
     # MOOD DETECTION
@@ -290,10 +329,10 @@ def generate_reply(platform, platform_user_id, name, user_message):
     conn.close()
 
     # ---------------------------
-    # SAVE MEMORY EVERY 5 MESSAGES
+    # SAVE MEMORY EVERY 20 MESSAGES
     # ---------------------------
 
-    if (message_count + 1) % 5 == 0:
+    if (message_count + 1) % 20 == 0:
         memory_text = generate_memory_summary(user_message)
         if memory_text:
             lines = memory_text.strip().split("\n")
