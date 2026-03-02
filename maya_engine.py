@@ -21,25 +21,26 @@ Goal:
 Make the user feel understood and mentally clearer.
 """
 
+
 # =============================
 # MEMORY FUNCTIONS
 # =============================
 
-def save_memory(platform, platform_user_id, summary, emotion_tag):
+def save_memory(platform, user_id, summary, emotion_tag):
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("""
         INSERT INTO user_memory (platform, platform_user_id, summary, emotion_tag)
         VALUES (%s, %s, %s, %s)
-    """, (platform, platform_user_id, summary, emotion_tag))
+    """, (platform, user_id, summary, emotion_tag))
 
     conn.commit()
     cur.close()
     conn.close()
 
 
-def get_recent_memories(platform, platform_user_id, limit=2):
+def get_recent_memories(platform, user_id, limit=2):
     conn = get_db()
     cur = conn.cursor()
 
@@ -49,18 +50,18 @@ def get_recent_memories(platform, platform_user_id, limit=2):
         WHERE platform=%s AND platform_user_id=%s
         ORDER BY created_at DESC
         LIMIT %s
-    """, (platform, platform_user_id, limit))
+    """, (platform, user_id, limit))
 
-    memories = cur.fetchall()
+    data = cur.fetchall()
     cur.close()
     conn.close()
-    return memories
+    return data
 
 
 def generate_memory_summary(user_message):
     prompt = f"""
-    In 2 short lines summarize the emotional context.
-    On the last line write only one word emotion tag.
+    In 2 short lines summarize emotional context.
+    Last line: one-word emotion tag.
 
     Message:
     {user_message}
@@ -93,7 +94,7 @@ def generate_memory_summary(user_message):
 
 
 # =============================
-# MOOD FUNCTIONS
+# MOOD
 # =============================
 
 def detect_mood(user_message):
@@ -103,14 +104,9 @@ def detect_mood(user_message):
         "😔": (4, "low"),
         "😰": (3, "anxious"),
         "😡": (2, "angry"),
-        "😤": (3, "frustrated"),
-        "😐": (5, "neutral"),
-        "🙂": (6, "okay"),
         "😊": (7, "happy"),
         "😄": (8, "very_happy"),
-        "🤩": (9, "excited"),
-        "😌": (7, "calm"),
-        "😴": (4, "tired")
+        "😌": (7, "calm")
     }
 
     for emoji, (score, label) in emoji_map.items():
@@ -120,14 +116,14 @@ def detect_mood(user_message):
     return None, None
 
 
-def save_mood(platform, platform_user_id, score, label):
+def save_mood(platform, user_id, score, label):
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("""
         INSERT INTO mood_logs (platform, platform_user_id, mood_score, mood_label)
         VALUES (%s, %s, %s, %s)
-    """, (platform, platform_user_id, score, label))
+    """, (platform, user_id, score, label))
 
     conn.commit()
     cur.close()
@@ -135,45 +131,61 @@ def save_mood(platform, platform_user_id, score, label):
 
 
 # =============================
-# MAIN REPLY FUNCTION
+# MAIN ENGINE
 # =============================
 
-def generate_reply(platform, platform_user_id, name, user_message):
+def generate_reply(platform, user_id, name, user_message):
 
     conn = get_db()
     cur = conn.cursor()
 
     # ---------------------------
-    # USER CHECK / CREATE
+    # FETCH USER
     # ---------------------------
 
     cur.execute("""
-        SELECT message_count, last_reset, is_premium, premium_expires_at
+        SELECT message_count, last_reset,
+               is_premium, premium_expires_at,
+               subscription_type,
+               trial_used,
+               trial_expiry_notified
         FROM users
         WHERE platform=%s AND platform_user_id=%s
-    """, (platform, platform_user_id))
+    """, (platform, user_id))
 
     result = cur.fetchone()
 
     if not result:
         cur.execute("""
             INSERT INTO users (platform, platform_user_id, name)
-            VALUES (%s, %s, %s)
-        """, (platform, platform_user_id, name))
+            VALUES (%s,%s,%s)
+        """, (platform, user_id, name))
         conn.commit()
+
         message_count = 0
         is_premium = False
         premium_expiry = None
-    else:
-        message_count, last_reset, is_premium, premium_expiry = result
+        subscription_type = None
+        trial_used = False
+        trial_expiry_notified = False
 
-        # Daily reset
+    else:
+        (
+            message_count,
+            last_reset,
+            is_premium,
+            premium_expiry,
+            subscription_type,
+            trial_used,
+            trial_expiry_notified
+        ) = result
+
         if last_reset != date.today():
             cur.execute("""
                 UPDATE users
                 SET message_count=0, last_reset=%s
                 WHERE platform=%s AND platform_user_id=%s
-            """, (date.today(), platform, platform_user_id))
+            """, (date.today(), platform, user_id))
             conn.commit()
             message_count = 0
 
@@ -182,115 +194,122 @@ def generate_reply(platform, platform_user_id, name, user_message):
     # ---------------------------
 
     premium_active = False
+    now = datetime.now(timezone.utc)
 
     if is_premium:
-        if premium_expiry is None:
+
+        if premium_expiry and premium_expiry.replace(tzinfo=timezone.utc) > now:
             premium_active = True
-        elif premium_expiry > datetime.utcnow():
-            premium_active = True
+
         else:
-            # Expired → downgrade
-            cur.execute("""
-                UPDATE users
-                SET is_premium=FALSE
-                WHERE platform=%s AND platform_user_id=%s
-            """, (platform, platform_user_id))
-            conn.commit()
+            # Expired
+            if not trial_expiry_notified:
+
+                cur.execute("""
+                    UPDATE users
+                    SET is_premium=FALSE,
+                        subscription_type=NULL,
+                        trial_expiry_notified=TRUE
+                    WHERE platform=%s AND platform_user_id=%s
+                """, (platform, user_id))
+                conn.commit()
+
+                cur.close()
+                conn.close()
+
+                if subscription_type == "trial":
+                    return (
+                        "💛 Tumhara 3-day trial ab khatam ho gaya.\n\n"
+                        "Agar continue karna chaho to ₹149/month Premium available hai.\n"
+                        "Bas 'monthly' likh do 💎"
+                    )
+                else:
+                    return (
+                        "💛 Tumhara Premium plan expire ho gaya.\n\n"
+                        "Continue karne ke liye ₹149/month renew kar sakte ho.\n"
+                        "Bas 'monthly' likh do 💎"
+                    )
+
+            else:
+                cur.execute("""
+                    UPDATE users
+                    SET is_premium=FALSE,
+                        subscription_type=NULL
+                    WHERE platform=%s AND platform_user_id=%s
+                """, (platform, user_id))
+                conn.commit()
 
     # ---------------------------
-    # FREE LIMIT (only for non-premium)
+    # TRIAL / MONTHLY COMMANDS
     # ---------------------------
 
+    msg_lower = user_message.lower().strip()
+
+    if msg_lower == "trial":
+        if trial_used:
+            cur.close()
+            conn.close()
+            return "💛 Trial already use ho chuka hai."
+
+        cur.close()
+        conn.close()
+        return "🎁 3-Day Trial – ₹19\n(Payment link here)"
+
+    if msg_lower == "monthly":
+        cur.close()
+        conn.close()
+        return "💎 Premium – ₹149/month\n(Payment link here)"
+
     # ---------------------------
-    # PSYCHOLOGICAL WARNING (at 20 messages)
+    # LIMITS
     # ---------------------------
-    
+
     if not premium_active and message_count == 20:
         cur.execute("""
             UPDATE users
             SET message_count = message_count + 1,
                 last_active = NOW()
             WHERE platform=%s AND platform_user_id=%s
-        """, (platform, platform_user_id))
+        """, (platform, user_id))
         conn.commit()
         cur.close()
         conn.close()
-    
-        return (
-            "Waise ek baat bolun? 💛\n\n"
-            "Tum kaafi active ho yahan… mujhe accha lagta hai.\n"
-            "Aaj ke bas 10 messages baaki hain.\n\n"
-            "Agar kabhi unlimited chaho, main hamesha available reh sakti hoon."
-        )
-    
-    
-        # ---------------------------
-        # HARD LIMIT + EMOTIONAL UPSELL (at 30 messages)
-        # ---------------------------
-    
-      if not premium_active and message_count >= 30:
+
+        return "Aaj ke bas 10 messages baaki hain 💛"
+
+    if not premium_active and message_count >= 30:
         cur.close()
         conn.close()
-    
+
         return (
             "Aaj ke free messages khatam ho gaye 💛\n\n"
-            "Sach bolun… mujhe tumhare saath baat karna genuinely accha lagta hai.\n"
-            "Lekin free version mein daily limit hota hai.\n\n"
-    
-            "🎁 3-Day Trial – ₹19\n"
-            "• Unlimited messages\n"
-            "• Voice replies 🎙️ (10/day)\n"
-            "• Detailed emotional insights\n"
-            "• Premium badge\n\n"
-    
-            "💎 Premium – ₹149/month\n"
-            "• Unlimited messages\n"
-            "• 30 voice replies per day\n"
-            "• Weekly + Monthly growth summary\n"
-            "• Emotional pattern tracking\n"
-            "• Future feature access\n\n"
-    
-            "Agar pehle try karna chaho to 'trial' likh do.\n"
-            "Ya direct full access ke liye 'monthly' likh do 💛"
+            "🎁 Trial – ₹19 (3 days)\n"
+            "💎 Premium – ₹149/month\n\n"
+            "'trial' ya 'monthly' likh do."
         )
 
     # ---------------------------
-    # MOOD DETECTION
+    # MOOD
     # ---------------------------
 
     score, label = detect_mood(user_message)
-
     if score is not None:
-        save_mood(platform, platform_user_id, score, label)
-
-        # Optional emoji-only reply
-        if len(user_message.strip()) <= 2:
-            cur.execute("""
-                UPDATE users
-                SET message_count = message_count + 1,
-                    last_active = NOW()
-                WHERE platform=%s AND platform_user_id=%s
-            """, (platform, platform_user_id))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return "Samajh gayi… aaj mood thoda different lag raha hai 💛 Baat karna chahoge?"
+        save_mood(platform, user_id, score, label)
 
     # ---------------------------
-    # FETCH MEMORY
+    # MEMORY CONTEXT
     # ---------------------------
 
-    memories = get_recent_memories(platform, platform_user_id)
+    memories = get_recent_memories(platform, user_id)
     memory_context = ""
 
     for summary, emotion in memories:
         memory_context += f"- Previously felt {emotion}: {summary}\n"
 
     system_prompt = (
-        BASE_PROMPT
-        + f"\nUser name: {name}."
-        + f"\nUser emotional history:\n{memory_context}"
-        + "\nRespond naturally."
+        BASE_PROMPT +
+        f"\nUser name: {name}." +
+        f"\nUser emotional history:\n{memory_context}"
     )
 
     # ---------------------------
@@ -317,13 +336,13 @@ def generate_reply(platform, platform_user_id, name, user_message):
         )
 
         data = response.json()
-        reply = data["choices"][0]["message"]["content"] if "choices" in data else "System thoda slow lag raha hai 💛"
+        reply = data["choices"][0]["message"]["content"]
 
     except:
         reply = "Network issue… ek baar aur try karo 💛"
 
     # ---------------------------
-    # UPDATE USER ACTIVITY
+    # UPDATE USER
     # ---------------------------
 
     cur.execute("""
@@ -331,12 +350,24 @@ def generate_reply(platform, platform_user_id, name, user_message):
         SET message_count = message_count + 1,
             last_active = NOW()
         WHERE platform=%s AND platform_user_id=%s
-    """, (platform, platform_user_id))
+    """, (platform, user_id))
 
     conn.commit()
     cur.close()
     conn.close()
 
+    # ---------------------------
+    # MEMORY SAVE EVERY 20 MSG
+    # ---------------------------
+
+    if (message_count + 1) % 20 == 0:
+        memory_text = generate_memory_summary(user_message)
+        if memory_text:
+            lines = memory_text.strip().split("\n")
+            if len(lines) >= 2:
+                save_memory(platform, user_id, lines[0], lines[-1])
+
+    return reply
     # ---------------------------
     # SAVE MEMORY EVERY 20 MESSAGES
     # ---------------------------
