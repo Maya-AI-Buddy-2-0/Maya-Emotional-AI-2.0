@@ -28,6 +28,8 @@ def init_db():
         -- Premium ready (future use)
         is_premium BOOLEAN DEFAULT FALSE,
         premium_expires_at TIMESTAMP,
+        trial_used BOOLEAN DEFAULT FALSE,
+        trial_expiry_notified BOOLEAN DEFAULT FALSE,
 
         UNIQUE(platform, platform_user_id)
     );
