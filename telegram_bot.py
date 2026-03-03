@@ -165,7 +165,7 @@ async def weekly_mood_summary(context: ContextTypes.DEFAULT_TYPE):
 # START BOT
 # =============================
 
-def start():
+async def start():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -177,4 +177,7 @@ def start():
     app.job_queue.run_repeating(weekly_mood_summary, interval=604800, first=120)
 
     print("Telegram bot running...")
-    app.run_polling(drop_pending_updates=True)
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
