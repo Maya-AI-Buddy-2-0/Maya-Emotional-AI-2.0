@@ -1,13 +1,18 @@
 from flask import Flask, request, jsonify
 import threading
 import asyncio
-import os
 import razorpay
 import json
 from datetime import datetime, timedelta
 
-from config import CHANNEL
+from config import (
+    CHANNEL,
+    RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_SECRET,
+    RAZORPAY_WEBHOOK_SECRET
+)
 from db import init_db, get_db
+
 
 # -----------------------------
 # Flask App
@@ -17,8 +22,9 @@ app = Flask(__name__)
 # Initialize DB
 init_db()
 
+
 # -----------------------------
-# Home Route (Health Check)
+# Health Check Route
 # -----------------------------
 @app.route("/")
 def home():
@@ -28,8 +34,6 @@ def home():
 # -----------------------------
 # Razorpay Webhook
 # -----------------------------
-WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-
 @app.route("/razorpay-webhook", methods=["POST"])
 def razorpay_webhook():
 
@@ -37,20 +41,17 @@ def razorpay_webhook():
     signature = request.headers.get("X-Razorpay-Signature")
 
     client = razorpay.Client(
-        auth=(
-            os.getenv("RAZORPAY_KEY_ID"),
-            os.getenv("RAZORPAY_KEY_SECRET")
-        )
+        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
     )
 
     # -------------------------
-    # Verify Razorpay Signature
+    # Verify Signature
     # -------------------------
     try:
         client.utility.verify_webhook_signature(
             payload,
             signature,
-            WEBHOOK_SECRET
+            RAZORPAY_WEBHOOK_SECRET
         )
     except Exception as e:
         print("Webhook signature verification failed:", e)
@@ -59,7 +60,7 @@ def razorpay_webhook():
     data = json.loads(payload)
 
     # -------------------------
-    # Handle Payment Success
+    # Handle Successful Payment
     # -------------------------
     if data.get("event") == "payment_link.paid":
 
@@ -111,11 +112,10 @@ def activate_subscription(platform, user_id, plan):
 
     print(f"Subscription activated for {user_id} ({subscription_type})")
 
-# -----------------------------
-# Start Bot in Background
-# -----------------------------
 
-
+# -----------------------------
+# Start Bot in Background (Async Safe)
+# -----------------------------
 def start_bot():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -128,5 +128,5 @@ def start_bot():
         start()
 
 
-# Start bot in background when module loads
+# Start bot immediately when app loads
 threading.Thread(target=start_bot, daemon=True).start()
