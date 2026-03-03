@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import threading
+import asyncio
 import os
 import razorpay
 import json
@@ -110,21 +111,22 @@ def activate_subscription(platform, user_id, plan):
 
     print(f"Subscription activated for {user_id} ({subscription_type})")
 
-
 # -----------------------------
 # Start Bot in Background
 # -----------------------------
+
+
 def start_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     if CHANNEL == "telegram":
         from telegram_bot import start
-        start()
+        loop.run_until_complete(start())
     elif CHANNEL == "whatsapp":
         from whatsapp_webhook import start
         start()
 
 
-# -----------------------------
-# Run App
-# -----------------------------
 # Start bot in background when module loads
-threading.Thread(target=start_bot).start()
+threading.Thread(target=start_bot, daemon=True).start()
