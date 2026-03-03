@@ -277,10 +277,11 @@ def generate_reply(platform, user_id, name, user_message):
         cur.close()
         conn.close()
 
-        return  "Waise ek baat bolun? 💛\n"
-                "Aaj ke 10 messages baaki hain.\n"
-                "Kabhi unlimited chaho to trial available hai ₹19 mein."
-        
+        return (
+        "Waise ek baat bolun? 💛\n"
+        "Aaj ke 10 messages baaki hain.\n"
+        "Kabhi unlimited chaho to trial available hai ₹19 mein."
+        )
 
     if not premium_active and message_count >= 30:
         cur.close()
