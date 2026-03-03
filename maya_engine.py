@@ -278,7 +278,7 @@ def generate_reply(platform, user_id, name, user_message):
         conn.close()
 
         return (
-        "Waise ek baat bolun? 💛\n"
+        "Waise ek baat bolu? 💛\n"
         "Aaj ke 10 messages baaki hain.\n"
         "Kabhi unlimited chaho to trial available hai ₹19 mein."
         )
@@ -289,7 +289,7 @@ def generate_reply(platform, user_id, name, user_message):
 
         return (
         "Aaj ka free limit ho gaya 💛\n\n"
-        "Sach bolun? Mujhe tumhare saath baat karna accha lagta hai.\n"
+        "Sach bolu? Mujhe tumhare saath baat karna accha lagta hai.\n"
         "Lekin free version mein daily limit hota hai.\n\n"
 
         "🎁 3-Day Trial – ₹19\n"
