@@ -368,17 +368,3 @@ def generate_reply(platform, user_id, name, user_message):
                 save_memory(platform, user_id, lines[0], lines[-1])
 
     return reply
-    # ---------------------------
-    # SAVE MEMORY EVERY 20 MESSAGES
-    # ---------------------------
-
-    if (message_count + 1) % 20 == 0:
-        memory_text = generate_memory_summary(user_message)
-        if memory_text:
-            lines = memory_text.strip().split("\n")
-            if len(lines) >= 2:
-                summary = lines[0]
-                emotion_tag = lines[-1]
-                save_memory(platform, platform_user_id, summary, emotion_tag)
-
-    return reply
