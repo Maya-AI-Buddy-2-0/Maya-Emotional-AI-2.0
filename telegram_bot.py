@@ -5,6 +5,9 @@ from maya_engine import generate_reply
 from db import get_db
 from datetime import datetime, timedelta
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 
 # =============================
 # MESSAGE HANDLER
@@ -165,7 +168,7 @@ async def weekly_mood_summary(context: ContextTypes.DEFAULT_TYPE):
 # START BOT
 # =============================
 
-async def start():
+def start():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -178,6 +181,8 @@ async def start():
 
     print("Telegram bot running...")
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
+    app.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    start()
