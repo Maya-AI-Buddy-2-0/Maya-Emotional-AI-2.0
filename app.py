@@ -1,3 +1,6 @@
+from flask import Flask
+app = Flask(__name__)
+
 from config import CHANNEL
 from db import init_db
 
