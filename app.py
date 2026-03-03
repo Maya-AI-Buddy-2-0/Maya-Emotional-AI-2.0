@@ -126,11 +126,5 @@ def start_bot():
 # -----------------------------
 # Run App
 # -----------------------------
-if __name__ == "__main__":
-
-    # Start bot in background thread
-    threading.Thread(target=start_bot).start()
-
-    # Run Flask server
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+# Start bot in background when module loads
+threading.Thread(target=start_bot).start()
