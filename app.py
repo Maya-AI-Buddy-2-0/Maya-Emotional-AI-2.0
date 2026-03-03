@@ -113,20 +113,20 @@ def activate_subscription(platform, user_id, plan):
     print(f"Subscription activated for {user_id} ({subscription_type})")
 
 
-# -----------------------------
-# Start Bot in Background (Async Safe)
-# -----------------------------
-def start_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# # -----------------------------
+# # Start Bot in Background (Async Safe)
+# # -----------------------------
+# def start_bot():
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
 
-    if CHANNEL == "telegram":
-        from telegram_bot import start
-        loop.run_until_complete(start())
-    elif CHANNEL == "whatsapp":
-        from whatsapp_webhook import start
-        start()
+#     if CHANNEL == "telegram":
+#         from telegram_bot import start
+#         loop.run_until_complete(start())
+#     elif CHANNEL == "whatsapp":
+#         from whatsapp_webhook import start
+#         start()
 
 
-# Start bot immediately when app loads
-threading.Thread(target=start_bot, daemon=True).start()
+# # Start bot immediately when app loads
+# threading.Thread(target=start_bot, daemon=True).start()
