@@ -2,6 +2,7 @@ import requests
 from datetime import date, datetime, timezone
 from config import OPENROUTER_KEY
 from db import get_db
+from payments import create_payment_link
 
 BASE_PROMPT = """
 You are Maya — Emotional intelligence powered by AI.
@@ -244,23 +245,39 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
     # TRIAL / MONTHLY COMMANDS
     # ---------------------------
-
+    
     msg_lower = user_message.lower().strip()
-
+    
     if msg_lower == "trial":
+    
         if trial_used:
             cur.close()
             conn.close()
             return "💛 Trial already use ho chuka hai."
-
+    
+        link = create_payment_link(platform, user_id, "trial")
+    
         cur.close()
         conn.close()
-        return "🎁 3-Day Trial – ₹19\n(Payment link here)"
-
+    
+        return (
+            "🎁 3-Day Trial – ₹19\n\n"
+            "Unlimited access for 3 days 💛\n\n"
+            f"Payment link:\n{link}"
+        )
+    
     if msg_lower == "monthly":
+    
+        link = create_payment_link(platform, user_id, "monthly")
+    
         cur.close()
         conn.close()
-        return "💎 Premium – ₹149/month\n(Payment link here)"
+    
+        return (
+            "💎 Maya Premium – ₹149/month\n\n"
+            "Unlimited access + full emotional analytics 💛\n\n"
+            f"Payment link:\n{link}"
+        )
 
     # ---------------------------
     # LIMITS
