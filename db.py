@@ -66,6 +66,21 @@ def init_db():
     );
     """)
 
+    # ============================
+    # Conversation Bain Table
+    # ============================
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS conversation_history (
+        id SERIAL PRIMARY KEY,
+        platform TEXT,
+        platform_user_id TEXT,
+        role TEXT,
+        message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     conn.commit()
     cur.close()
     conn.close()
