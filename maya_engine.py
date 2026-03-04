@@ -220,6 +220,25 @@ def get_recent_messages(platform, user_id, limit=6):
     return list(reversed(rows))
 
 
+def observation_insight():
+
+    observations = [
+
+        "You seem like someone who puts a lot of pressure on yourself to get things right.",
+
+        "I might be wrong, but it feels like you carry a lot of responsibility quietly.",
+
+        "From the way you talk, you seem quite thoughtful about your decisions.",
+
+        "You seem like someone who reflects deeply before opening up.",
+
+        "Sometimes it feels like you expect a lot from yourself."
+
+    ]
+
+    return random.choice(observations)
+
+
 # =============================
 # MAIN ENGINE
 # =============================
@@ -322,6 +341,10 @@ def generate_reply(platform, user_id, name, user_message):
         reply += "\n\n" + reflection_prompt()
 
     reply = f"{human_opening()} {reply}"
+    
+    if (message_count + 1) % 10 == 0:
+        reply += "\n\nCan I share something I noticed about you?\n\n"
+        reply += observation_insight()
 
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
