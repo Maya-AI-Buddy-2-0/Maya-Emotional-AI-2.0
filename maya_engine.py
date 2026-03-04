@@ -42,7 +42,7 @@ If the user expresses self-harm thoughts encourage real-world support.
 # =============================
 
 def detect_crisis(text):
-text = text.lower()
+    text = text.lower()
 
 
 triggers = [
