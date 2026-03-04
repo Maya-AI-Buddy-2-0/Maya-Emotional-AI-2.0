@@ -238,6 +238,71 @@ def observation_insight():
 
     return random.choice(observations)
 
+def generate_personality_profile(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT message
+        FROM conversation_history
+        WHERE platform=%s AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 30
+        """,
+        (platform, user_id),
+    )
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return "I still need to know you a bit more before creating your reflection profile 💛"
+
+    conversation_text = "\n".join([r[0] for r in rows])
+
+    prompt = f"""
+                Based on the following conversation messages, describe the user's personality in 3 short insights.
+                
+                Conversation:
+                {conversation_text}
+                
+                Respond like:
+                
+                Your Reflection Profile
+                
+                • trait 1
+                • trait 2
+                • trait 3
+               """
+
+    try:
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "openchat/openchat-3.5",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.6,
+                "max_tokens": 200,
+            },
+            timeout=30,
+        )
+
+        data = response.json()
+        profile = data["choices"][0]["message"]["content"]
+
+        return profile
+
+    except:
+        return "I tried to generate your reflection profile but something went wrong. Try again later 💛"
 
 # =============================
 # MAIN ENGINE
@@ -249,8 +314,13 @@ def generate_reply(platform, user_id, name, user_message):
         return (
             "I'm really sorry you're feeling this way.\n\n"
             "You deserve support and you don’t have to go through this alone.\n\n"
-            "📞 Kiran Mental Health Helpline: 1800-599-0019"
         )
+        
+    msg_lower = user_message.lower().strip()
+
+    if msg_lower == "profile":
+        return generate_personality_profile(platform, user_id)
+        
 
     conn = get_db()
     cur = conn.cursor()
@@ -345,6 +415,10 @@ def generate_reply(platform, user_id, name, user_message):
     if (message_count + 1) % 10 == 0:
         reply += "\n\nCan I share something I noticed about you?\n\n"
         reply += observation_insight()
+    
+    if (message_count + 1) % 50 == 0:
+        reply += "\n\nI've been noticing patterns in how you think and express yourself.\n"
+        reply += "If you're curious, type 'profile' and I can share your reflection profile."
 
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
