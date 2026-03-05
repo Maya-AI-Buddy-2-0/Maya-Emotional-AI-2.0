@@ -67,7 +67,6 @@ def human_opening():
         "Hmm…",
         "Samajh raha hoon…",
         "Waise ek baat bolu?",
-        "I might be wrong but…",
         "That sounds important."
     ]
 
@@ -299,20 +298,6 @@ def daily_checkin_message():
     return random.choice(messages)
 
 
-
-def observation_insight():
-
-    observations = [
-
-        "Sometimes it feels like you think deeply before sharing things.",
-        "You seem quite reflective when you talk about your experiences.",
-        "It feels like you often process things internally first.",
-        "You seem thoughtful about the way situations affect you.",
-        "You appear quite self-aware about your emotions."
-
-    ]
-
-    return random.choice(observations)
 
 
 def attachment_loop():
@@ -856,9 +841,6 @@ def generate_reply(platform, user_id, name, user_message):
     # OBSERVATION ENGINE
     # ---------------------------
 
-    if message_count > 60 and (message_count + 1) % 25 == 0:
-        reply += "\n\nCan I share something I noticed about you?\n\n"
-        reply += observation_insight()
 
     if (message_count + 1) % 50 == 0:
         reply += "\n\nI've been noticing patterns in how you think and express yourself.\n"
@@ -869,13 +851,6 @@ def generate_reply(platform, user_id, name, user_message):
         if pattern:
             reply += "\n\n" + pattern
 
-    if (message_count + 1) % 40 == 0:
-        reply += "\n\nI've been noticing something about how you think.\n\n"
-        reply += mind_pattern_insight()
-
-    if (message_count + 1) % 35 == 0:
-        reply += "\n\nSomething I’ve been noticing about you:\n\n"
-        reply += emotional_mirror()
 
     # Attachment loop
     if message_count > 15 and random.random() < 0.06:
