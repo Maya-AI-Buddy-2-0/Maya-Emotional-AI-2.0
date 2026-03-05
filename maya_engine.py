@@ -320,13 +320,9 @@ def attachment_loop():
     messages = [
 
         "By the way, I enjoy our conversations. You seem very thoughtful when sharing things.",
-
         "I notice you reflect quite deeply about your experiences. That’s not very common.",
-
         "Talking with you is interesting — you seem quite aware of your emotions.",
-
         "You explain things in a very reflective way. I like that.",
-
         "You seem like someone who thinks carefully before expressing feelings."
 
     ]
@@ -599,8 +595,8 @@ def conversation_depth(reply):
         "Abhi sabse zyada kya chal raha hai dimaag mein?"
     ]
 
-    # 30% chance to add depth question
-    if random.random() < 0.30:
+    # 18% chance to add depth question
+    if random.random() < 0.18:
 
         # avoid double questions
         if "?" not in reply:
@@ -628,6 +624,21 @@ def generate_reply(platform, user_id, name, user_message):
             )
 
     msg_lower = user_message.lower().strip()
+
+    # ---------------------------
+    # SIMPLE GREETING HANDLER
+    # ---------------------------
+    
+    short_inputs = ["hi", "hello", "hey", "hii", "helo"]
+    
+    if msg_lower in short_inputs:
+        greetings = [
+            "Hey 🙂 Kaisa chal raha hai aaj?",
+            "Hi! Aaj ka din kaisa ja raha hai?",
+            "Hello 🙂 Aaj mood kaisa hai?",
+            "Hey! Sab theek chal raha hai?"
+        ]
+        return random.choice(greetings)
 
     # ---------------------------
     # TRIAL / MONTHLY COMMANDS
@@ -793,14 +804,10 @@ def generate_reply(platform, user_id, name, user_message):
 
     reply = call_llm(messages, temperature=0.7, max_tokens=220)
     
-    reply = conversation_depth(reply)
-    
-    if reply and len(reply) > 500:
-        reply = reply[:500]
-
-    
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
+    else:
+        reply = conversation_depth(reply)
 
     # Anti-robot filter
     robot_words = [
@@ -811,8 +818,9 @@ def generate_reply(platform, user_id, name, user_message):
         "i'm just an ai"
     ]
     
-    for w in robot_words:
-        if reply and w in reply.lower():
+    if reply:
+        text = reply.lower()
+        if any(w in text for w in robot_words):
             reply = "Hmm… mujhe thoda aur samajhna hoga. Tum thoda aur bataoge?"
             
 
