@@ -1,5 +1,6 @@
 import requests
 import random
+import time
 from datetime import date, datetime
 from config import OPENROUTER_KEY
 from db import get_db
@@ -287,6 +288,60 @@ def observation_insight():
 
     return random.choice(observations)
 
+
+# =============================
+# MODEL API CALLING
+# =============================
+
+def call_llm(messages, temperature=0.7, max_tokens=220):
+
+    models = [
+        "google/gemma-3-12b-it:free",
+        "google/gemma-3-4b-it:free",
+        "google/gemma-3n-e4b-it:free"
+    ]
+
+    for model in models:
+        time.sleep(0.5)
+        
+        try:
+
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                timeout=30,
+            )
+
+            data = response.json()
+            
+            if not isinstance(data, dict):
+                print("Invalid API response:", data)
+                continue
+
+            if "choices" in data and len(data["choices"]) > 0:
+                return data["choices"][0]["message"]["content"]
+
+            if "error" in data:
+                print("Model failed:", model, data["error"])
+                continue
+
+        except Exception as e:
+
+            print("Model exception:", model, e)
+            continue
+
+    return None
+    
+
 def generate_personality_profile(platform, user_id):
 
     conn = get_db()
@@ -328,39 +383,16 @@ def generate_personality_profile(platform, user_id):
                 • trait 3
                """
 
-    try:
+    reply = call_llm(
+        [{"role": "user", "content": prompt}],
+        temperature=0.6,
+        max_tokens=200
+    )
     
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "google/gemma-3-12b-it:free",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.6,
-                "max_tokens": 200,
-            },
-            timeout=30,
-        )
+    if not reply:
+        return "I'm having trouble generating your profile right now. Try again later 💛"
     
-        data = response.json()
-    
-        if "error" in data:
-            print("OpenRouter Error:", data["error"])
-            return "I'm having trouble generating your profile right now. Try again later 💛"
-    
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"]
-    
-        print("Unexpected API response:", data)
-        return "Something went wrong while generating your profile."
-    
-    except Exception as e:
-    
-        print("API Exception:", e)
-        return "Network issue… try again later 💛"
+    return reply
         
 
 def emotional_pattern_insight(platform, user_id):
@@ -489,41 +521,13 @@ Conversation:
 {conversation_text}
 """
 
-    try:
-    
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "google/gemma-3-12b-it:free",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.4,
-                "max_tokens": 120,
-            },
-            timeout=30,
-        )
-    
-        data = response.json()
-    
-        if "error" in data:
-            print("OpenRouter Error:", data["error"])
-            return None
-    
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"]
-    
-        print("Unexpected API response:", data)
-        return None
-    
-    except Exception as e:
-    
-        print("API Exception:", e)
-        return None
+    reply = call_llm(
+        [{"role": "user", "content": prompt}],
+        temperature=0.4,
+        max_tokens=120
+    )
 
-    return None
+    return reply
 
 
 def soft_uncertainty():
@@ -541,6 +545,9 @@ def soft_uncertainty():
     ]
 
     return random.choice(phrases)
+
+
+    
 
 # =============================
 # MAIN ENGINE
@@ -723,40 +730,10 @@ def generate_reply(platform, user_id, name, user_message):
     # AI CALL
     # ---------------------------
 
-    try:
-    
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "google/gemma-3-12b-it:free",
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 220,
-            },
-            timeout=30,
-        )
-    
-        data = response.json()
-    
-        if "error" in data:
-            print("OpenRouter Error:", data["error"])
-            reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
-    
-        elif "choices" in data and len(data["choices"]) > 0:
-            reply = data["choices"][0]["message"]["content"]
-    
-        else:
-            print("Unexpected API response:", data)
-            reply = "Network hiccup hua lagta hai… ek baar aur try karo 💛"
-    
-    except Exception as e:
-    
-        print("API Exception:", e)
-        reply = "Network issue… ek baar aur try karo 💛"
+    reply = call_llm(messages, temperature=0.7, max_tokens=220)
+
+    if not reply:
+        reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
 
     # ---------------------------
     # HUMAN RESPONSE LAYER
@@ -824,6 +801,9 @@ def generate_reply(platform, user_id, name, user_message):
     
             if len(lines) >= 2:
                 save_memory(platform, user_id, lines[0], lines[-1])
+
+
+    
 
     # ---------------------------
     # UPDATE USER
