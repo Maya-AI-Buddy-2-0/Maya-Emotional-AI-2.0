@@ -296,9 +296,9 @@ def observation_insight():
 def call_llm(messages, temperature=0.7, max_tokens=220):
 
     models = [
-        "google/gemma-3-12b-it:free",
-        "google/gemma-3-4b-it:free",
-        "google/gemma-3n-e4b-it:free"
+        "arcee-ai/trinity-large-preview:free",
+        "openai/gpt-oss-120b:free",
+        "openai/gpt-oss-20b:free"
     ]
 
     for model in models:
