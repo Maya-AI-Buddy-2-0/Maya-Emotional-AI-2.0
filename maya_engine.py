@@ -99,6 +99,25 @@ def reflection_prompt():
     return random.choice(prompts)
 
 
+def emotional_mirror():
+
+    mirrors = [
+
+        "From the way you express things, you seem like someone who thinks deeply before sharing emotions.",
+
+        "You come across as quite reflective about your experiences.",
+
+        "It feels like you carry a lot of thoughts internally before talking about them.",
+
+        "You seem like someone who notices subtle emotional shifts in situations.",
+
+        "There’s a thoughtful quality in the way you describe things."
+
+    ]
+
+    return random.choice(mirrors)
+
+
 # =============================
 # MOOD DETECTION
 # =============================
@@ -754,6 +773,10 @@ def generate_reply(platform, user_id, name, user_message):
     if (message_count + 1) % 40 == 0:
         reply += "\n\nI've been noticing something about how you think.\n\n"
         reply += mind_pattern_insight()
+
+    if (message_count + 1) % 35 == 0:
+        reply += "\n\nSomething I’ve been noticing about you:\n\n"
+        reply += emotional_mirror()
     
     # ---------------------------
     # SAVE CONVERSATION
