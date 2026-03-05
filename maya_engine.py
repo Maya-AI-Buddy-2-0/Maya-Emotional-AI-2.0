@@ -13,6 +13,7 @@ from payments import create_payment_link
 BASE_PROMPT = """
 You are Maya — Emotional intelligence powered by AI.
 You were created by Shiladitya Mallick (@byshiladityamallick) as a reflection companion for clarity, growth, and compassion.
+Talk like a caring human friend, not like an AI analyzing the user.
 
 Identity:
 You speak warmly like a thoughtful close friend.
@@ -105,13 +106,9 @@ def emotional_mirror():
     mirrors = [
 
         "From the way you express things, you seem like someone who thinks deeply before sharing emotions.",
-
         "You come across as quite reflective about your experiences.",
-
         "It feels like you carry a lot of thoughts internally before talking about them.",
-
         "You seem like someone who notices subtle emotional shifts in situations.",
-
         "There’s a thoughtful quality in the way you describe things."
 
     ]
@@ -294,9 +291,7 @@ def daily_checkin_message():
     messages = [
 
         "Hey 💛 quick emotional check-in.\n\nHow has today been emotionally for you?",
-
         "Just checking in.\n\nHow are you feeling today, really?",
-
         "Small pause moment.\n\nHow has your day been emotionally?"
 
     ]
@@ -309,19 +304,16 @@ def observation_insight():
 
     observations = [
 
-        "You seem like someone who puts a lot of pressure on yourself to get things right.",
-
-        "I might be wrong, but it feels like you carry a lot of responsibility quietly.",
-
-        "From the way you talk, you seem quite thoughtful about your decisions.",
-
-        "You seem like someone who reflects deeply before opening up.",
-
-        "Sometimes it feels like you expect a lot from yourself."
+        "Sometimes it feels like you think deeply before sharing things.",
+        "You seem quite reflective when you talk about your experiences.",
+        "It feels like you often process things internally first.",
+        "You seem thoughtful about the way situations affect you.",
+        "You appear quite self-aware about your emotions."
 
     ]
 
     return random.choice(observations)
+
 
 def attachment_loop():
 
@@ -496,13 +488,9 @@ def mind_pattern_insight():
     patterns = [
 
         "You seem like someone who thinks deeply before expressing emotions.",
-
         "It feels like you process situations internally before opening up.",
-
         "You appear quite reflective about your feelings and decisions.",
-
         "You seem thoughtful about how situations affect you emotionally.",
-
         "It feels like you often carry responsibilities quietly."
 
     ]
@@ -592,17 +580,33 @@ def soft_uncertainty():
     phrases = [
 
         "I might be wrong, but…",
-
         "Tell me if I'm misunderstanding…",
-
         "Maybe I'm seeing this incorrectly…",
-
         "Just thinking out loud…"
 
     ]
 
     return random.choice(phrases)
 
+
+def conversation_depth(reply):
+
+    questions = [
+        "Aaj kuch particular hua kya?",
+        "Kab se aisa feel ho raha hai?",
+        "Tumhe sabse zyada kis baat ka stress lagta hai?",
+        "Kisi se baat ki tumne iske baare mein?",
+        "Abhi sabse zyada kya chal raha hai dimaag mein?"
+    ]
+
+    # 30% chance to add depth question
+    if random.random() < 0.30:
+
+        # avoid double questions
+        if "?" not in reply:
+            reply += "\n\n" + random.choice(questions)
+
+    return reply
 
     
 
@@ -788,9 +792,13 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
 
     reply = call_llm(messages, temperature=0.7, max_tokens=220)
+    
+    reply = conversation_depth(reply)
+    
     if reply and len(reply) > 500:
         reply = reply[:500]
 
+    
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
 
@@ -818,7 +826,7 @@ def generate_reply(platform, user_id, name, user_message):
     # HUMAN RESPONSE LAYER
     # ---------------------------
 
-    if random.random() < 0.05:
+    if random.random() < 0.03:
         reply += "\n\n" + reflection_prompt()
         
     if random.random() < 0.25:
@@ -832,7 +840,7 @@ def generate_reply(platform, user_id, name, user_message):
         reply += "\n\n" + recall
 
 
-    if random.random() < 0.07:
+    if random.random() < 0.02:
         reply = soft_uncertainty() + "\n\n" + reply
     
         
@@ -840,7 +848,7 @@ def generate_reply(platform, user_id, name, user_message):
     # OBSERVATION ENGINE
     # ---------------------------
 
-    if (message_count + 1) % 10 == 0:
+    if message_count > 60 and (message_count + 1) % 25 == 0:
         reply += "\n\nCan I share something I noticed about you?\n\n"
         reply += observation_insight()
 
