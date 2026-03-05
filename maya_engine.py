@@ -207,6 +207,41 @@ def get_recent_memories(platform, user_id, limit=2):
     return data
 
 
+def emotional_continuity(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT summary, emotion_tag
+        FROM user_memory
+        WHERE platform=%s AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (platform, user_id),
+    )
+
+    row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if not row:
+        return None
+
+    summary, emotion = row
+
+    messages = [
+        f"Last time you mentioned: {summary}",
+        f"Earlier you seemed {emotion}. How are you feeling about that now?",
+        f"Previously you talked about: {summary}. Has anything changed since then?",
+        f"I remember you mentioning: {summary}. How is that situation now?"
+    ]
+
+    return random.choice(messages)
+    
 # =============================
 # CONVERSATION MEMORY
 # =============================
@@ -288,6 +323,23 @@ def observation_insight():
 
     return random.choice(observations)
 
+def attachment_loop():
+
+    messages = [
+
+        "By the way, I enjoy our conversations. You seem very thoughtful when sharing things.",
+
+        "I notice you reflect quite deeply about your experiences. That’s not very common.",
+
+        "Talking with you is interesting — you seem quite aware of your emotions.",
+
+        "You explain things in a very reflective way. I like that.",
+
+        "You seem like someone who thinks carefully before expressing feelings."
+
+    ]
+
+    return random.choice(messages)
 
 # =============================
 # MODEL API CALLING
@@ -296,8 +348,8 @@ def observation_insight():
 def call_llm(messages, temperature=0.7, max_tokens=220):
 
     models = [
-        "arcee-ai/trinity-large-preview:free",
         "openai/gpt-oss-120b:free",
+        "arcee-ai/trinity-large-preview:free",
         "openai/gpt-oss-20b:free"
     ]
 
@@ -514,8 +566,13 @@ def generate_conversation_summary(platform, user_id):
     conversation_text = "\n".join([r[0] for r in rows])
 
     prompt = f"""
-Summarize the emotional context of this conversation in 2 short lines.
-Last line must contain one word emotion tag.
+Summarize the user's emotional situation in ONE very short sentence (max 12 words).
+
+Then give ONE word emotion tag on the next line.
+
+Example:
+User was feeling hopeful about improving their life.
+hopeful
 
 Conversation:
 {conversation_text}
@@ -731,21 +788,45 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
 
     reply = call_llm(messages, temperature=0.7, max_tokens=220)
+    if reply and len(reply) > 500:
+        reply = reply[:500]
 
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
 
+    # Anti-robot filter
+    robot_words = [
+        "as an ai",
+        "as a language model",
+        "i am an ai",
+        "i cannot provide",
+        "i'm just an ai"
+    ]
+    
+    for w in robot_words:
+        if reply and w in reply.lower():
+            reply = "Hmm… mujhe thoda aur samajhna hoga. Tum thoda aur bataoge?"
+            
+
+    # Emotional continuity
+    if message_count > 25 and random.random() < 0.05:
+        continuity = emotional_continuity(platform, user_id)
+        if continuity:
+            reply = continuity + "\n\n" + reply
+        
     # ---------------------------
     # HUMAN RESPONSE LAYER
     # ---------------------------
 
-    if random.random() < 0.18:
+    if random.random() < 0.05:
         reply += "\n\n" + reflection_prompt()
-    reply = f"{human_opening()} {reply}"
+        
+    if random.random() < 0.25:
+        reply = f"{human_opening()} {reply}"
 
     
     recall = None
-    if random.random() < 0.08:
+    if message_count > 20 and random.random() < 0.08:
         recall = memory_recall(platform, user_id)
     if recall:
         reply += "\n\n" + recall
@@ -779,6 +860,10 @@ def generate_reply(platform, user_id, name, user_message):
     if (message_count + 1) % 35 == 0:
         reply += "\n\nSomething I’ve been noticing about you:\n\n"
         reply += emotional_mirror()
+
+    # Attachment loop
+    if message_count > 15 and random.random() < 0.06:
+        reply += "\n\n" + attachment_loop()
     
     # ---------------------------
     # SAVE CONVERSATION
@@ -823,5 +908,10 @@ def generate_reply(platform, user_id, name, user_message):
 
     cur.close()
     conn.close()
-
+    
+    # Clean repeated openings
+    reply = reply.replace("Hmm… Hmm…", "Hmm…")
+    reply = reply.replace("Hmm… Hmm", "Hmm…")
+    reply = reply.replace("Samajh raha hoon… Samajh raha hoon…", "Samajh raha hoon…")
+    
     return reply
