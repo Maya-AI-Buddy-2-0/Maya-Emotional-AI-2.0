@@ -4,9 +4,13 @@ from config import BOT_TOKEN
 from maya_engine import generate_reply
 from db import get_db
 from datetime import datetime, timedelta
+import asyncio
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 
 # =============================
@@ -18,6 +22,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.from_user.first_name
     text = update.message.text
 
+    await asyncio.sleep(min(len(text) / 25, 3))
     reply = generate_reply("telegram", user_id, name, text)
 
     await update.message.reply_text(reply)
@@ -38,7 +43,7 @@ async def silence_check(context: ContextTypes.DEFAULT_TYPE):
         SELECT platform_user_id
         FROM users
         WHERE platform='telegram'
-        AND last_active < %s
+        AND (last_active IS NULL OR last_active < %s)
     """, (threshold,))
 
     users = cur.fetchall()
@@ -164,6 +169,37 @@ async def weekly_mood_summary(context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
+
+
+async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT platform_user_id
+        FROM users
+        WHERE platform='telegram'
+    """)
+
+    users = cur.fetchall()
+
+    for (user_id,) in users:
+
+        try:
+            from maya_engine import daily_checkin_message
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=daily_checkin_message()
+            )
+
+        except:
+            pass
+
+    cur.close()
+    conn.close()
+
 # =============================
 # START BOT
 # =============================
@@ -178,6 +214,9 @@ def start():
 
     # Weekly mood summary (7 days)
     app.job_queue.run_repeating(weekly_mood_summary, interval=604800, first=120)
+
+    # Daily emotional check-in (every 24 hours)
+    app.job_queue.run_repeating(daily_checkin, interval=86400, first=300)
 
     print("Telegram bot running...")
 
