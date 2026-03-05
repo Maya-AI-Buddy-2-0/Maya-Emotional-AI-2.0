@@ -605,6 +605,19 @@ def micro_reaction():
     return random.choice(reactions)
     
 
+
+def emotional_hook():
+
+    hooks = [
+
+        "Waise ek baat puchu — jab tum stress feel karte ho, tum usually kya karte ho?",
+        "Kabhi kabhi sochta hoon — tum zyada overthink karte ho ya emotions ko ignore kar dete ho?",
+        "Ek curious question — jab tum low feel karte ho, tum akela rehna pasand karte ho ya kisi se baat?",
+        "Waise tum usually apne problems kisi ko batate ho ya khud hi handle karte ho?",
+        "Kabhi kisi ne tumse pucha hai ki tum actually kaisa feel karte ho?"
+    ]
+
+    return random.choice(hooks)
 # =============================
 # MAIN ENGINE
 # =============================
@@ -884,6 +897,11 @@ def generate_reply(platform, user_id, name, user_message):
     # Attachment loop
     if message_count > 15 and random.random() < 0.06:
         reply += "\n\n" + attachment_loop()
+
+
+    # Emotional hook (rare)
+    if message_count > 8 and random.random() < 0.10:
+        reply += "\n\n" + emotional_hook()
     
     # ---------------------------
     # SAVE CONVERSATION
