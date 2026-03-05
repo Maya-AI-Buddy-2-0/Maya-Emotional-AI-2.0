@@ -337,7 +337,7 @@ def generate_personality_profile(platform, user_id):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "openchat/openchat-3.5",
+                "model": "google/gemma-3-12b-it:free",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.6,
                 "max_tokens": 200,
@@ -489,7 +489,7 @@ Conversation:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "openchat/openchat-3.5",
+                "model": "google/gemma-3-12b-it:free",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.4,
                 "max_tokens": 120,
@@ -714,7 +714,7 @@ def generate_reply(platform, user_id, name, user_message):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "openchat/openchat-3.5",
+                "model": "google/gemma-3-12b-it:free",
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 300,
