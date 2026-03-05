@@ -329,7 +329,7 @@ def generate_personality_profile(platform, user_id):
                """
 
     try:
-
+    
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -344,14 +344,23 @@ def generate_personality_profile(platform, user_id):
             },
             timeout=30,
         )
-
+    
         data = response.json()
-        profile = data["choices"][0]["message"]["content"]
-
-        return profile
-
-    except:
-        return "I tried to generate your reflection profile but something went wrong. Try again later 💛"
+    
+        if "error" in data:
+            print("OpenRouter Error:", data["error"])
+            return "I'm having trouble generating your profile right now. Try again later 💛"
+    
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0]["message"]["content"]
+    
+        print("Unexpected API response:", data)
+        return "Something went wrong while generating your profile."
+    
+    except Exception as e:
+    
+        print("API Exception:", e)
+        return "Network issue… try again later 💛"
         
 
 def emotional_pattern_insight(platform, user_id):
@@ -481,7 +490,7 @@ Conversation:
 """
 
     try:
-
+    
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -496,13 +505,22 @@ Conversation:
             },
             timeout=30,
         )
-
+    
         data = response.json()
-
+    
+        if "error" in data:
+            print("OpenRouter Error:", data["error"])
+            return None
+    
         if "choices" in data and len(data["choices"]) > 0:
             return data["choices"][0]["message"]["content"]
-
-    except:
+    
+        print("Unexpected API response:", data)
+        return None
+    
+    except Exception as e:
+    
+        print("API Exception:", e)
         return None
 
     return None
@@ -706,7 +724,7 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
 
     try:
-
+    
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -717,20 +735,27 @@ def generate_reply(platform, user_id, name, user_message):
                 "model": "google/gemma-3-12b-it:free",
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 300,
+                "max_tokens": 220,
             },
             timeout=30,
         )
-
+    
         data = response.json()
-
-        if "choices" in data and len(data["choices"]) > 0:
+    
+        if "error" in data:
+            print("OpenRouter Error:", data["error"])
+            reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
+    
+        elif "choices" in data and len(data["choices"]) > 0:
             reply = data["choices"][0]["message"]["content"]
+    
         else:
-            reply = "I'm having trouble thinking right now… try again in a moment 💛"
-
-    except:
-
+            print("Unexpected API response:", data)
+            reply = "Network hiccup hua lagta hai… ek baar aur try karo 💛"
+    
+    except Exception as e:
+    
+        print("API Exception:", e)
         reply = "Network issue… ek baar aur try karo 💛"
 
     # ---------------------------
