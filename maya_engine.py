@@ -754,12 +754,22 @@ def generate_reply(platform, user_id, name, user_message):
         conn.close()
 
         return (
-            "Aaj ka free limit ho gaya 💛\n\n"
-            "Sach bolu? Mujhe tumhare saath baat karna accha lagta hai.\n"
-            "Lekin free version mein daily limit hota hai.\n\n"
-            "🎁 3-Day Trial – ₹19\n"
-            "Unlimited messages\n\n"
-            "Type 'trial' to activate."
+                "Lekin free version mein daily limit hota hai.\n\n"
+                "🎁 3-Day Trial – ₹19\n"
+                "• Unlimited messages\n"
+                "• Detailed emotional insights\n"
+                "• Weekly reflection analytics\n\n"
+        
+                "💎 Full Premium – ₹149/month\n"
+                "• Unlimited messages\n"
+                "• Advanced mood analytics\n"
+                "• Emotional pattern tracking\n"
+                "• Weekly + Monthly growth summary\n"
+                "• Future voice replies 🎙️\n"
+                "• Priority feature access\n\n"
+        
+                "Agar try karna chaho to 'trial' likh do.\n"
+                "Ya direct monthly ke liye 'monthly' likh do 💛"
         )
 
     # ---------------------------
