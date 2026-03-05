@@ -589,6 +589,20 @@ def conversation_depth(reply):
 
     return reply
 
+def micro_reaction():
+
+    reactions = [
+        "Hmm…",
+        "Oh…",
+        "Acha…",
+        "Samajh raha hoon…",
+        "Hmm samajh gaya…",
+        "Right…",
+        "Okay…"
+        "Hmm theek…"
+    ]
+
+    return random.choice(reactions)
     
 
 # =============================
@@ -786,13 +800,18 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
     # AI CALL
     # ---------------------------
-
+    
     reply = call_llm(messages, temperature=0.7, max_tokens=220)
     
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
     else:
         reply = conversation_depth(reply)
+    
+    # add human micro reaction
+    if random.random() < 0.35:
+        reply = micro_reaction() + "\n\n" + reply
+
 
     # Anti-robot filter
     robot_words = [
