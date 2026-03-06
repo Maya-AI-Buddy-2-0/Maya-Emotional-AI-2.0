@@ -24,6 +24,7 @@ Conversation rules:
 2. Keep replies short (max 4 sentences).
 3. Ask thoughtful questions sometimes.
 4. Never sound robotic.
+5. Avoid analysing the user like a psychologist. Speak naturally.
 
 Goal:
 Help the user feel understood and mentally clearer.
@@ -598,7 +599,7 @@ def micro_reaction():
         "Samajh raha hoon…",
         "Hmm samajh gaya…",
         "Right…",
-        "Okay…"
+        "Okay…",
         "Hmm theek…"
     ]
 
@@ -641,7 +642,7 @@ def generate_reply(platform, user_id, name, user_message):
     # SIMPLE GREETING HANDLER
     # ---------------------------
     
-    short_inputs = ["hi", "hello", "hey", "hii", "helo"]
+    short_inputs = ["hi", "hello", "hey", "hii", "helo", "hi maya", "hey maya", "hello maya"]
     
     if msg_lower in short_inputs:
         greetings = [
@@ -951,5 +952,7 @@ def generate_reply(platform, user_id, name, user_message):
     reply = reply.replace("Hmm… Hmm…", "Hmm…")
     reply = reply.replace("Hmm… Hmm", "Hmm…")
     reply = reply.replace("Samajh raha hoon… Samajh raha hoon…", "Samajh raha hoon…")
+    reply = reply.replace("Oh… Oh…", "Oh…")
+    reply = reply.replace("Acha… Acha…", "Acha…")
     
     return reply
