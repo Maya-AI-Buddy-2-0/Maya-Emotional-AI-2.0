@@ -28,7 +28,7 @@ init_db()
 # -----------------------------
 @app.route("/")
 def home():
-    return "Maya backend running", 200
+    return {"status": "running", "service": "maya-emotional-ai", "time": datetime.utcnow().isoformat()}, 200
 
 
 # -----------------------------
@@ -84,6 +84,14 @@ def activate_subscription(platform, user_id, plan):
 
     conn = get_db()
     cur = conn.cursor()
+
+    # Reset expired premium
+    cur.execute("""
+        UPDATE users
+        SET is_premium = FALSE
+        WHERE premium_expires_at IS NOT NULL
+        AND premium_expires_at < NOW()
+    """)
 
     if plan == "trial":
         expires = datetime.utcnow() + timedelta(days=3)
