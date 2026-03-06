@@ -183,7 +183,7 @@ async def weekly_mood_summary(context: ContextTypes.DEFAULT_TYPE):
 
         moods = cur.fetchall()
 
-        if not moods:
+        if not moods or len(moods) < 3:
             continue
 
         scores = [m[0] for m in moods if m[0] is not None]
@@ -280,8 +280,8 @@ def start():
     # Silence check every 6 hours
     app.job_queue.run_repeating(silence_check, interval=21600, first=60)
 
-    # Weekly mood summary (7 days)
-    app.job_queue.run_repeating(weekly_mood_summary, interval=604800, first=120)
+    # Weekly mood summary (On sunday)
+    app.job_queue.run_daily(weekly_mood_summary, time=time(hour=20, minute=0), days=(6,))  # Sunday
 
     # Daily emotional check-in (every day at 7 PM)
     app.job_queue.run_daily(daily_checkin, time=time(hour=19, minute=0))
