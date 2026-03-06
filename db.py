@@ -3,7 +3,7 @@ from config import DATABASE_URL
 
 
 def get_db():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db():
@@ -31,6 +31,10 @@ def init_db():
         trial_used BOOLEAN DEFAULT FALSE,
         trial_expiry_notified BOOLEAN DEFAULT FALSE,
         subscription_type TEXT,
+
+        -- Onboarding system
+        user_intent TEXT,
+        onboarding_completed BOOLEAN DEFAULT FALSE,
 
         UNIQUE(platform, platform_user_id)
     );
