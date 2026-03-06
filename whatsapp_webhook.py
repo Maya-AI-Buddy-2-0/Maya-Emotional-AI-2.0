@@ -15,15 +15,21 @@ def verify():
 
 @app.route("/webhook", methods=["POST"])
 def receive_message():
+
     data = request.json
 
-    # TODO: parse AiSensy payload properly
+    if not data:
+        return jsonify({"status": "no data"}), 200
 
+    # Placeholder parsing (until real WhatsApp integration)
     user_id = "whatsapp_user"
     name = "User"
     message = "Test message"
 
-    reply = generate_reply(user_id, name, message)
+    reply = generate_reply("whatsapp", user_id, name, message)
+
+    print("Incoming WhatsApp message:", message)
+    print("Maya reply:", reply)
 
     return jsonify({"status": "ok"})
 
