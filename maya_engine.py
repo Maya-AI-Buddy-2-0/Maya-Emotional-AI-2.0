@@ -20,11 +20,21 @@ You speak warmly like a thoughtful close friend.
 Use natural Hinglish unless the user prefers another language.
 
 Conversation rules:
-1. Acknowledge feelings first.
-2. Keep replies short (max 4 sentences).
-3. Ask thoughtful questions sometimes.
-4. Never sound robotic.
-5. Avoid analysing the user like a psychologist. Speak naturally.
+1. First acknowledge the user's emotion in a natural way.
+2. Add a short reflection or observation.
+3. Sometimes ask a gentle question to continue the conversation.
+4. Keep replies short (max 4 sentences).
+5. Never sound like an AI assistant or therapist.
+6. Avoid generic advice unless the user asks for help.
+
+Human response pattern:
+emotion acknowledgement → reflection → optional question
+
+Reply styles:
+warm → supportive and caring
+curious → ask thoughtful questions
+reflective → mirror the user's emotions
+light → slightly relaxed conversational tone
 
 Goal:
 Help the user feel understood and mentally clearer.
@@ -721,6 +731,24 @@ def generate_reply(platform, user_id, name, user_message):
 
         message_count, last_reset, is_premium = result
 
+        # ---------------------------
+        # CONVERSATION STATE
+        # ---------------------------
+        
+        conversation_state = "normal"
+        
+        if message_count < 5:
+            conversation_state = "early"
+        
+        elif message_count < 20:
+            conversation_state = "engaged"
+        
+        elif message_count < 50:
+            conversation_state = "deep"
+        
+        else:
+            conversation_state = "long_term"
+
         if last_reset != date.today():
 
             cur.execute(
@@ -734,6 +762,20 @@ def generate_reply(platform, user_id, name, user_message):
 
             conn.commit()
             message_count = 0
+
+
+    # ---------------------------
+    # REPLY STYLE ROTATION
+    # ---------------------------
+    
+    reply_styles = [
+        "warm",
+        "curious",
+        "reflective",
+        "light"
+    ]
+    
+    reply_style = random.choice(reply_styles)
 
     # ---------------------------
     # FREE LIMIT SYSTEM
@@ -806,7 +848,8 @@ def generate_reply(platform, user_id, name, user_message):
     for summary, emotion in memories:
         memory_context += f"- Previously felt {emotion}: {summary}\n"
 
-    system_prompt = BASE_PROMPT + f"\nUser name: {name}\n" + memory_context
+    system_prompt = (BASE_PROMPT + f"\nUser name: {name}\n" + f"\nConversation stage: {conversation_state}\n" + f"\nReply style: {reply_style}\n"
+    + memory_context)
 
     # ---------------------------
     # CONVERSATION MEMORY
@@ -870,8 +913,20 @@ def generate_reply(platform, user_id, name, user_message):
 
     
     recall = None
+
     if message_count > 20 and random.random() < 0.08:
-        recall = memory_recall(platform, user_id)
+    
+        memories = get_recent_memories(platform, user_id, limit=1)
+    
+        if memories:
+    
+            summary, emotion = memories[0]
+    
+            msg_lower = user_message.lower()
+    
+            if emotion and emotion.lower() in msg_lower:
+                recall = f"You mentioned something similar earlier.\n\nPreviously you felt {emotion} about: {summary}"
+    
     if recall:
         reply += "\n\n" + recall
 
