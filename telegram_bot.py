@@ -3,7 +3,7 @@ from telegram import Update
 from config import BOT_TOKEN
 from maya_engine import generate_reply
 from db import get_db
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import asyncio
 
 import logging
@@ -20,7 +20,75 @@ logging.basicConfig(
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     name = update.message.from_user.first_name
-    text = update.message.text
+    text = update.message.text or ""
+
+    # -----------------------------
+    # ONBOARDING CHECK
+    # -----------------------------
+    
+    conn = get_db()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT onboarding_completed
+        FROM users
+        WHERE platform='telegram'
+        AND platform_user_id=%s
+    """, (user_id,))
+    
+    row = cur.fetchone()
+    
+    if not row:
+        # new user inserted by maya_engine
+        pass
+    else:
+        onboarding_completed = row[0]
+    
+        if not onboarding_completed:
+            if text.lower() in ["1", "2", "3"]:
+    
+                intent_map = {
+                    "1": "talk about feelings",
+                    "2": "stress relief",
+                    "3": "casual conversation"
+                }
+    
+                intent = intent_map.get(text)
+    
+                cur.execute("""
+                    UPDATE users
+                    SET user_intent=%s,
+                        onboarding_completed=TRUE
+                    WHERE platform='telegram'
+                    AND platform_user_id=%s
+                """, (intent, user_id))
+    
+                conn.commit()
+    
+                await update.message.reply_text(
+                    "Got it 💛\n\nYou can start talking to me anytime."
+                )
+    
+                cur.close()
+                conn.close()
+                return
+    
+            else:
+    
+                await update.message.reply_text(
+                    "Hey 🙂 I'm Maya.\n\n"
+                    "How would you like to use me?\n\n"
+                    "1️⃣ Talk about feelings\n"
+                    "2️⃣ Stress relief\n"
+                    "3️⃣ Casual conversation"
+                )
+    
+                cur.close()
+                conn.close()
+                return
+    
+    cur.close()
+    conn.close()
 
     await asyncio.sleep(min(len(text) / 25, 3))
     reply = generate_reply("telegram", user_id, name, text)
@@ -215,8 +283,8 @@ def start():
     # Weekly mood summary (7 days)
     app.job_queue.run_repeating(weekly_mood_summary, interval=604800, first=120)
 
-    # Daily emotional check-in (every 24 hours)
-    app.job_queue.run_repeating(daily_checkin, interval=86400, first=300)
+    # Daily emotional check-in (every day at 7 PM)
+    app.job_queue.run_daily(daily_checkin, time=time(hour=19, minute=0))
 
     print("Telegram bot running...")
 
