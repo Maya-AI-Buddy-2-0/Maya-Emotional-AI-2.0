@@ -649,6 +649,26 @@ def generate_reply(platform, user_id, name, user_message):
     msg_lower = user_message.lower().strip()
 
     # ---------------------------
+    # SHORT ACKNOWLEDGEMENT DETECTION
+    # ---------------------------
+    
+    short_replies = [
+        "ok", "okay", "hmm", "hmm ok", "hmm okay",
+        "yeah", "yes", "right", "true", "hmm true",
+        "👍", "🙂", "hmm...", "hmm."
+    ]
+    
+    if msg_lower in short_replies:
+        responses = [
+            "hmm 🙂",
+            "acha…",
+            "samajh gaya 🙂",
+            "right…",
+            "hmm theek…"
+        ]
+        return random.choice(responses)
+
+    # ---------------------------
     # SIMPLE GREETING HANDLER
     # ---------------------------
     
