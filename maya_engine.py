@@ -43,6 +43,7 @@ Important rules:
 • Do not sound like a therapist
 • Do not analyze the user
 • Do not invent details the user did not mention
+• Never assume reasons for the user's feelings
 • Do not repeat the same opening phrases
 
 Sometimes ask a gentle question.
@@ -385,7 +386,7 @@ def call_llm(messages):
                     "model": model,
                     "messages": messages,
                     "temperature": 0.75,
-                    "max_tokens": 300,
+                    "max_tokens": 220,
                 },
                 timeout=30,
             )
@@ -473,7 +474,7 @@ def generate_reply(platform, user_id, name, user_message):
 
     greetings = ["hi", "hello", "hey", "hii"]
 
-    if msg_lower in greetings:
+    if msg_lower in greetings and message_count == 0:
 
         return random.choice([
             "Hey 🙂 kaisa chal raha hai aaj?",
