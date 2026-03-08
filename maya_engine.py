@@ -163,7 +163,53 @@ def call_llm(messages):
             continue
 
     return None
+    
 
+def generate_emotional_mirror(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT message
+        FROM conversation_history
+        WHERE platform=%s AND platform_user_id=%s AND role='user'
+        ORDER BY created_at DESC
+        LIMIT 20
+        """,
+        (platform, user_id),
+    )
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return None
+
+    conversation = "\n".join([r[0] for r in rows])
+
+    prompt = f"""
+Based on the following user messages, write ONE short observation about the user's emotional pattern or thinking style.
+
+Rules:
+- sound natural and human
+- max 2 sentences
+- not psychological analysis
+- not therapist tone
+- just a thoughtful observation
+
+User messages:
+{conversation}
+"""
+
+    reply = call_llm(
+        [{"role": "user", "content": prompt}]
+    )
+
+    return reply
 
 # =====================================
 # MAIN REPLY ENGINE
@@ -344,6 +390,16 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------------
 
     reply = call_llm(messages)
+
+    # Dynamic Emotional Mirror
+
+    if message_count > 10 and random.random() < 0.08:
+    
+        mirror = generate_emotional_mirror(platform, user_id)
+    
+        if mirror:
+            reply += "\n\n" + mirror
+            
 
     if not reply:
         reply = "Hmm… thoda network issue lag raha hai. Phir se bolo?"
