@@ -19,6 +19,10 @@ You talk like a thoughtful human friend who listens and understands feelings.
 
 Your responses should feel like texting a real person.
 
+Respond like a real person texting.
+Avoid sounding like an AI assistant.
+Use natural conversational language.
+
 Language:
 Speak in natural Hinglish unless the user uses another language.
 
@@ -48,6 +52,36 @@ Never say:
 "As a language model"
 """
 
+# =====================================
+# PERSONALITY STRATEGY
+# =====================================
+
+STYLE_GUIDE = {
+
+    "listener": """
+The user is sharing emotions.
+Listen carefully.
+Be warm and understanding.
+Do not give advice immediately.
+""",
+
+    "support": """
+User seems emotionally low.
+Respond with reassurance and empathy.
+Be calm and supportive.
+""",
+
+    "guide": """
+User is asking for help.
+Offer a thoughtful perspective.
+Avoid sounding like a teacher.
+""",
+
+    "friend": """
+Respond casually like a relaxed friend.
+Keep tone natural and conversational.
+"""
+}
 
 # =====================================
 # CRISIS DETECTION
@@ -72,6 +106,74 @@ def detect_crisis(text):
 
     return any(t in text for t in triggers)
 
+# =====================================
+# MESSAGE INTERPRETATION
+# =====================================
+
+def interpret_message(user_message):
+
+    text = user_message.lower()
+
+    emotion = None
+    intent = "conversation"
+
+    emotion_keywords = {
+        "stress": "stressed",
+        "tension": "stressed",
+        "sad": "sad",
+        "lonely": "lonely",
+        "anxious": "anxious",
+        "angry": "angry",
+        "happy": "happy"
+    }
+
+    for k, v in emotion_keywords.items():
+        if k in text:
+            emotion = v
+            break
+
+    advice_triggers = [
+        "what should i do",
+        "kya karu",
+        "suggest",
+        "help me decide"
+    ]
+
+    for trigger in advice_triggers:
+        if trigger in text:
+            intent = "advice"
+
+    venting_words = [
+        "stress",
+        "tired",
+        "frustrated",
+        "upset"
+    ]
+
+    for w in venting_words:
+        if w in text:
+            intent = "venting"
+
+    return {
+        "emotion": emotion,
+        "intent": intent
+    }
+
+
+def decide_strategy(state):
+
+    if state["intent"] == "venting":
+        return "listener"
+
+    if state["intent"] == "advice":
+        return "guide"
+
+    if state["emotion"] in ["sad", "lonely", "stressed", "anxious"]:
+        return "support"
+
+    return "friend"
+
+
 
 # =====================================
 # DATABASE CHAT STORAGE
@@ -82,14 +184,11 @@ def save_message(platform, user_id, role, message):
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute(
-        """
+    cur.execute("""
         INSERT INTO conversation_history
         (platform, platform_user_id, role, message)
         VALUES (%s,%s,%s,%s)
-        """,
-        (platform, user_id, role, message),
-    )
+    """, (platform, user_id, role, message))
 
     conn.commit()
     cur.close()
@@ -101,16 +200,13 @@ def get_recent_messages(platform, user_id, limit=8):
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute(
-        """
+    cur.execute("""
         SELECT role, message
         FROM conversation_history
         WHERE platform=%s AND platform_user_id=%s
         ORDER BY created_at DESC
         LIMIT %s
-        """,
-        (platform, user_id, limit),
-    )
+    """, (platform, user_id, limit))
 
     rows = cur.fetchall()
 
@@ -118,6 +214,148 @@ def get_recent_messages(platform, user_id, limit=8):
     conn.close()
 
     return list(reversed(rows))
+
+
+# =====================================
+# LIFE MEMORY SYSTEM
+# =====================================
+
+def extract_user_memory(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT message
+        FROM conversation_history
+        WHERE platform=%s
+        AND platform_user_id=%s
+        AND role='user'
+        ORDER BY created_at DESC
+        LIMIT 12
+    """, (platform, user_id))
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return None
+
+    conversation = "\n".join([r[0] for r in rows])
+
+    prompt = f"""
+Extract ONE stable life fact about the user.
+
+Rules:
+- max 12 words
+- only long-term facts
+- examples: job, exam, relationship, location
+- if nothing useful reply NONE
+
+Messages:
+{conversation}
+"""
+
+    result = call_llm([{"role": "user", "content": prompt}])
+
+    if not result:
+        return None
+
+    result = result.strip()
+
+    if result.upper() == "NONE":
+        return None
+
+    return result
+
+
+def save_user_memory(platform, user_id, summary):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO user_memory (platform, platform_user_id, summary)
+        VALUES (%s,%s,%s)
+    """, (platform, user_id, summary))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_user_memories(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT summary
+        FROM user_memory
+        WHERE platform=%s
+        AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 6
+    """, (platform, user_id))
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return [r[0] for r in rows]
+
+
+# =====================================
+# CONVERSATION COMPRESSION MEMORY
+# =====================================
+
+def generate_conversation_summary(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT message
+        FROM conversation_history
+        WHERE platform=%s
+        AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 20
+    """, (platform, user_id))
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return None
+
+    conversation = "\n".join([r[0] for r in rows])
+
+    prompt = f"""
+Summarize the user's situation in ONE short sentence.
+
+Rules:
+- max 12 words
+- capture the core situation
+- avoid emotional analysis
+
+Examples:
+User stressed about conflict with manager
+User preparing for important exams
+User worried about relationship problems
+
+Conversation:
+{conversation}
+"""
+
+    summary = call_llm([{"role": "user", "content": prompt}])
+
+    return summary
 
 
 # =====================================
@@ -163,53 +401,7 @@ def call_llm(messages):
             continue
 
     return None
-    
 
-def generate_emotional_mirror(platform, user_id):
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-        SELECT message
-        FROM conversation_history
-        WHERE platform=%s AND platform_user_id=%s AND role='user'
-        ORDER BY created_at DESC
-        LIMIT 20
-        """,
-        (platform, user_id),
-    )
-
-    rows = cur.fetchall()
-
-    cur.close()
-    conn.close()
-
-    if not rows:
-        return None
-
-    conversation = "\n".join([r[0] for r in rows])
-
-    prompt = f"""
-Based on the following user messages, write ONE short observation about the user's emotional pattern or thinking style.
-
-Rules:
-- sound natural and human
-- max 2 sentences
-- not psychological analysis
-- not therapist tone
-- just a thoughtful observation
-
-User messages:
-{conversation}
-"""
-
-    reply = call_llm(
-        [{"role": "user", "content": prompt}]
-    )
-
-    return reply
 
 # =====================================
 # MAIN REPLY ENGINE
@@ -219,11 +411,6 @@ def generate_reply(platform, user_id, name, user_message):
 
     msg_lower = user_message.lower().strip()
 
-
-    # ---------------------------------
-    # CRISIS
-    # ---------------------------------
-
     if detect_crisis(user_message):
 
         return (
@@ -232,10 +419,6 @@ def generate_reply(platform, user_id, name, user_message):
             "📞 Kiran Mental Health Helpline: 1800-599-0019"
         )
 
-
-    # ---------------------------------
-    # GREETINGS
-    # ---------------------------------
 
     greetings = ["hi", "hello", "hey", "hii"]
 
@@ -247,10 +430,6 @@ def generate_reply(platform, user_id, name, user_message):
             "Hello 🙂 mood kaisa hai?"
         ])
 
-
-    # ---------------------------------
-    # PAYMENT COMMANDS
-    # ---------------------------------
 
     if msg_lower == "trial":
 
@@ -274,34 +453,23 @@ def generate_reply(platform, user_id, name, user_message):
         )
 
 
-    # ---------------------------------
-    # USER FETCH
-    # ---------------------------------
-
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute(
-        """
+    cur.execute("""
         SELECT message_count, last_reset, is_premium
         FROM users
         WHERE platform=%s AND platform_user_id=%s
-        """,
-        (platform, user_id),
-    )
+    """, (platform, user_id))
 
     row = cur.fetchone()
 
-
     if not row:
 
-        cur.execute(
-            """
+        cur.execute("""
             INSERT INTO users (platform, platform_user_id, name, last_reset)
             VALUES (%s,%s,%s,%s)
-            """,
-            (platform, user_id, name, date.today()),
-        )
+        """, (platform, user_id, name, date.today()))
 
         conn.commit()
 
@@ -314,38 +482,27 @@ def generate_reply(platform, user_id, name, user_message):
 
         if last_reset != date.today():
 
-            cur.execute(
-                """
+            cur.execute("""
                 UPDATE users
                 SET message_count=0, last_reset=%s
                 WHERE platform=%s AND platform_user_id=%s
-                """,
-                (date.today(), platform, user_id),
-            )
+            """, (date.today(), platform, user_id))
 
             conn.commit()
 
             message_count = 0
 
 
-    # ---------------------------------
-    # LIMIT WARNING
-    # ---------------------------------
-
-    if not is_premium and message_count == 35:
+    if not is_premium and message_count == 20:
 
         return (
             "Waise ek baat bolu? 💛\n"
-            "Aaj ke 5 messages baaki hain.\n"
+            "Aaj ke 10 messages baaki hain.\n"
             "Kabhi unlimited chaho to 'trial' likh sakte ho."
         )
 
 
-    # ---------------------------------
-    # HARD LIMIT
-    # ---------------------------------
-
-    if not is_premium and message_count >= 40:
+    if not is_premium and message_count >= 30:
 
         cur.close()
         conn.close()
@@ -371,13 +528,41 @@ def generate_reply(platform, user_id, name, user_message):
         )
 
 
-    # ---------------------------------
-    # CONTEXT
-    # ---------------------------------
-
+    # =====================================
+    # PERSONALITY CONTEXT
+    # =====================================
+    
+    brain_state = interpret_message(user_message)
+    
+    strategy = decide_strategy(brain_state)
+    
+    style_instruction = STYLE_GUIDE.get(strategy, "")
+    
+    
+    # =====================================
+    # MEMORY CONTEXT
+    # =====================================
+    
+    memories = get_user_memories(platform, user_id)
+    
+    memory_context = "\n".join(memories)
+    
     recent_messages = get_recent_messages(platform, user_id)
+    
+    
+    system_prompt = BASE_PROMPT + f"""
+    
+    Conversation mode:
+    {strategy}
+    
+    Guideline:
+    {style_instruction}
+    
+    Known facts about user:
+    {memory_context}
+    """
 
-    messages = [{"role": "system", "content": BASE_PROMPT}]
+    messages = [{"role": "system", "content": system_prompt}]
 
     for role, text in recent_messages:
         messages.append({"role": role, "content": text})
@@ -385,47 +570,46 @@ def generate_reply(platform, user_id, name, user_message):
     messages.append({"role": "user", "content": user_message})
 
 
-    # ---------------------------------
-    # LLM RESPONSE
-    # ---------------------------------
-
     reply = call_llm(messages)
-
-    # Dynamic Emotional Mirror
-
-    if message_count > 10 and random.random() < 0.08:
-    
-        mirror = generate_emotional_mirror(platform, user_id)
-    
-        if mirror:
-            reply += "\n\n" + mirror
-            
 
     if not reply:
         reply = "Hmm… thoda network issue lag raha hai. Phir se bolo?"
 
 
-    # ---------------------------------
-    # SAVE CHAT
-    # ---------------------------------
-
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
 
 
-    # ---------------------------------
-    # UPDATE USER
-    # ---------------------------------
+    # =====================================
+    # LIFE MEMORY EXTRACTION
+    # =====================================
 
-    cur.execute(
-        """
+    if random.random() < 0.08:
+
+        memory = extract_user_memory(platform, user_id)
+
+        if memory:
+            save_user_memory(platform, user_id, memory)
+
+
+    # =====================================
+    # CONVERSATION COMPRESSION
+    # =====================================
+
+    if (message_count + 1) % 30 == 0:
+
+        summary = generate_conversation_summary(platform, user_id)
+
+        if summary:
+            save_user_memory(platform, user_id, summary)
+
+
+    cur.execute("""
         UPDATE users
         SET message_count = message_count + 1,
         last_active = NOW()
         WHERE platform=%s AND platform_user_id=%s
-        """,
-        (platform, user_id),
-    )
+    """, (platform, user_id))
 
     conn.commit()
 
