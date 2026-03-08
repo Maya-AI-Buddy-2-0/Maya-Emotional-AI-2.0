@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.constants import ChatAction
 
 from config import BOT_TOKEN
-from maya_engine import generate_reply, daily_checkin_message
+from maya_engine import generate_reply, daily_checkin_message, late_night_checkin_message
 from db import get_db
 
 from datetime import datetime, timedelta, time
@@ -261,13 +261,52 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
                 chat_id=user_id,
                 text=daily_checkin_message()
             )
+            await asyncio.sleep(0.5)
 
+        
         except Exception as e:
             logging.error(e)
 
     cur.close()
     conn.close()
 
+# =============================
+# LATE NIGHT CHECK-IN
+# =============================
+
+async def late_night_checkin(context: ContextTypes.DEFAULT_TYPE):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    threshold = datetime.utcnow() - timedelta(days=7)
+
+    cur.execute("""
+        SELECT platform_user_id
+        FROM users
+        WHERE platform='telegram'
+        AND last_active > %s
+    """, (threshold,))
+
+    users = cur.fetchall()
+
+    for (user_id,) in users:
+
+        try:
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=late_night_checkin_message()
+            )
+
+            await asyncio.sleep(0.5)
+            
+
+        except Exception as e:
+            logging.error(e)
+
+    cur.close()
+    conn.close()
 
 # =============================
 # START BOT
@@ -299,6 +338,12 @@ def start():
     app.job_queue.run_daily(
         daily_checkin,
         time=time(hour=19, minute=0)
+    )
+
+    # late night emotional check-in
+    app.job_queue.run_daily(
+        late_night_checkin,
+        time=time(hour=23, minute=30)
     )
 
     print("Telegram bot running...")
