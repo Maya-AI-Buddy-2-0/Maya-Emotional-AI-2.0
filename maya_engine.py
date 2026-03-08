@@ -23,9 +23,14 @@ Conversation rules:
 1. First acknowledge the user's emotion in a natural way.
 2. Add a short reflection or observation.
 3. Sometimes ask a gentle question to continue the conversation.
-4. Keep replies short (max 4 sentences).
+4. Replies should feel natural and conversational.
+Sometimes 1–2 sentences, sometimes 3–5 sentences depending on the situation.
+Avoid overly long paragraphs.
 5. Never sound like an AI assistant or therapist.
 6. Avoid generic advice unless the user asks for help.
+
+Never assume facts the user did not mention.
+If something is unclear, ask gently instead of guessing.
 
 If emotional escalation is detected, slow the conversation down and respond calmly and supportively.
 Avoid analysis and focus on reassurance and understanding.
@@ -33,8 +38,14 @@ Avoid analysis and focus on reassurance and understanding.
 If the user has been feeling low or stressed for several messages,
 acknowledge that the feeling seems ongoing rather than temporary.
 
-Human response pattern:
-emotion acknowledgement → reflection → optional question
+Human response rhythm:
+1. Acknowledge the user's emotion.
+2. Share a small perspective or supportive thought.
+3. Offer reassurance or validation.
+4. Sometimes ask ONE gentle question to continue.
+
+Do not ask questions in every message.
+Sometimes simply respond with understanding or perspective.
 
 Reply styles:
 warm → supportive and caring
@@ -306,7 +317,7 @@ def save_message(platform, user_id, role, message):
     conn.close()
 
 
-def get_recent_messages(platform, user_id, limit=6):
+def get_recent_messages(platform, user_id, limit=10):
 
     conn = get_db()
     cur = conn.cursor()
@@ -363,12 +374,13 @@ def attachment_loop():
 # MODEL API CALLING
 # =============================
 
-def call_llm(messages, temperature=0.7, max_tokens=220):
+def call_llm(messages, temperature=0.7, max_tokens=350):
 
     models = [
-        "openai/gpt-oss-120b:free",
+        "google/gemma-3-12b-it:free",
+        "google/gemma-3-4b-it:free",
         "arcee-ai/trinity-large-preview:free",
-        "openai/gpt-oss-20b:free"
+        "meta-llama/llama-3.2-3b-instruct:free"
     ]
 
     max_retries = 2
@@ -636,8 +648,8 @@ def conversation_depth(reply):
         "Abhi sabse zyada kya chal raha hai dimaag mein?"
     ]
 
-    # 10% chance to add depth question
-    if random.random() < 0.10:
+    # 6% chance to add depth question
+    if random.random() < 0.06:
 
         # avoid double questions
         if "?" not in reply:
@@ -691,6 +703,33 @@ def supportive_response():
     return random.choice(options)
 
 
+def perspective_response():
+
+    options = [
+
+        "Kabhi kabhi office situations unexpectedly escalate ho jati hain.",
+        "Managers kabhi kabhi pressure mein react kar dete hain.",
+        "Aise moments mein insaan ko unfair bhi feel ho sakta hai.",
+        "Kabhi chhoti mistake bhi log bada issue bana dete hain.",
+        "Workplace misunderstandings kaafi common hote hain."
+
+    ]
+
+    return random.choice(options)
+
+def empathy_response():
+
+    options = [
+
+        "Yeh situation sach mein heavy feel ho sakti hai.",
+        "Aise moments emotionally draining ho jate hain.",
+        "Kisi ka harsh reaction kabhi kabhi dil pe lag jata hai.",
+        "Lagta hai yeh situation tumhe kaafi affect kar rahi hai."
+
+    ]
+
+    return random.choice(options)
+    
 # =============================
 # EMOTIONAL ESCALATION DETECTOR
 # =============================
@@ -1352,6 +1391,9 @@ def generate_reply(platform, user_id, name, user_message):
     if random.random() < 0.25:
         reply = f"{human_opening()} {reply}"
 
+    if random.random() < 0.25:
+        reply = empathy_response() + "\n\n" + reply
+
     
     recall = None
 
@@ -1407,6 +1449,10 @@ def generate_reply(platform, user_id, name, user_message):
         reply += "\n\n" + supportive_response()
 
 
+    # Perspective sharing layer
+    if random.random() < 0.30:
+        reply += "\n\n" + perspective_response()
+    
     # ---------------------------
     # SAVE CONVERSATION
     # ---------------------------
@@ -1470,7 +1516,7 @@ def generate_reply(platform, user_id, name, user_message):
             "Haan… samajh rahe hoon."
         ]
     
-        reply = random.choice(short_pauses)
+        reply = random.choice(short_pauses) + "\n\n" + reply
     
     return reply
 
