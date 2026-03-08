@@ -404,6 +404,57 @@ def call_llm(messages):
 
 
 # =====================================
+# DAILY CHECKIN GENERATOR
+# =====================================
+
+def daily_checkin_message():
+
+    prompt = """
+Write a short friendly daily emotional check-in message.
+
+Rules:
+- 1 or 2 sentences
+- casual human tone
+- feels like a friend texting
+- not motivational speech
+"""
+
+    reply = call_llm([
+        {"role": "user", "content": prompt}
+    ])
+
+    if not reply:
+        reply = "Hey… just checking in. How’s your day going?"
+
+    return reply
+
+
+# =====================================
+# LATE NIGHT CHECKIN GENERATOR
+# =====================================
+
+def late_night_checkin_message():
+
+    prompt = """
+Write a short late-night emotional check-in message.
+
+Rules:
+- calm tone
+- 1 or 2 sentences
+- feels like a friend texting late at night
+"""
+
+    reply = call_llm([
+        {"role": "user", "content": prompt}
+    ])
+
+    if not reply:
+        reply = "Still awake? Nights can feel quiet sometimes."
+
+    return reply
+
+
+# =====================================
 # MAIN REPLY ENGINE
 # =====================================
 
