@@ -377,9 +377,9 @@ def attachment_loop():
 def call_llm(messages, temperature=0.7, max_tokens=350):
 
     models = [
-        "google/gemma-3-12b-it:free",
-        "google/gemma-3-4b-it:free",
         "arcee-ai/trinity-large-preview:free",
+        "openai/gpt-oss-120b:free",
+        "google/gemma-3-4b-it:free",
         "meta-llama/llama-3.2-3b-instruct:free"
     ]
 
@@ -407,7 +407,9 @@ def call_llm(messages, temperature=0.7, max_tokens=350):
                 )
 
                 if response.status_code != 200:
-                    print("Model error:", model, response.status_code)
+                    print("Model error:", model)
+                    print("Status:", response.status_code)
+                    print("Response:", response.text)
                     time.sleep(1)
                     continue
 
