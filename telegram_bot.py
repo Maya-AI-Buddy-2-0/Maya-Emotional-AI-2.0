@@ -1,5 +1,6 @@
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 from telegram import Update
+from telegram.constants import ChatAction
 from config import BOT_TOKEN
 from maya_engine import generate_reply
 from db import get_db
@@ -20,7 +21,7 @@ logging.basicConfig(
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     name = update.message.from_user.first_name
-    text = update.message.text or ""
+    text = (update.message.text or "").strip()
 
     # -----------------------------
     # ONBOARDING CHECK
@@ -90,9 +91,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
-    await asyncio.sleep(min(len(text) / 25, 3))
     reply = generate_reply("telegram", user_id, name, text)
-
+    
+    # show typing animation
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id,
+        action=ChatAction.TYPING
+    )
+    
+    # simulate typing speed
+    typing_delay = min(len(reply) / 18, 4)
+    
+    await asyncio.sleep(typing_delay)
+    
     await update.message.reply_text(reply)
 
 
