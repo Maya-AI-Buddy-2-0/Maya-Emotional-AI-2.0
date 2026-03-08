@@ -91,18 +91,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
-    reply = generate_reply("telegram", user_id, name, text)
-    
-    # show typing animation
+
+    # start typing indicator
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id,
         action=ChatAction.TYPING
     )
     
-    # simulate typing speed
+    # start AI generation
+    reply = generate_reply("telegram", user_id, name, text)
+    
+    # typing animation duration
     typing_delay = min(len(reply) / 18, 4)
     
-    await asyncio.sleep(typing_delay)
+    # keep typing indicator alive
+    for _ in range(int(typing_delay)):
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING
+        )
+        await asyncio.sleep(1)
     
     await update.message.reply_text(reply)
 
