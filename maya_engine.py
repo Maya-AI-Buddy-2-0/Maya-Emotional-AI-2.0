@@ -27,6 +27,12 @@ Conversation rules:
 5. Never sound like an AI assistant or therapist.
 6. Avoid generic advice unless the user asks for help.
 
+If emotional escalation is detected, slow the conversation down and respond calmly and supportively.
+Avoid analysis and focus on reassurance and understanding.
+
+If the user has been feeling low or stressed for several messages,
+acknowledge that the feeling seems ongoing rather than temporary.
+
 Human response pattern:
 emotion acknowledgement → reflection → optional question
 
@@ -248,6 +254,33 @@ def emotional_continuity(platform, user_id):
     ]
 
     return random.choice(messages)
+
+
+def get_conversation_context(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT summary
+        FROM user_memory
+        WHERE platform=%s AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (platform, user_id),
+    )
+
+    row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if not row:
+        return ""
+
+    return f"User emotional context: {row[0]}"
     
 # =============================
 # CONVERSATION MEMORY
@@ -337,43 +370,54 @@ def call_llm(messages, temperature=0.7, max_tokens=220):
         "openai/gpt-oss-20b:free"
     ]
 
+    max_retries = 2
+
     for model in models:
-        time.sleep(0.5)
-        
-        try:
 
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-                timeout=30,
-            )
+        for attempt in range(max_retries):
 
-            data = response.json()
-            
-            if not isinstance(data, dict):
-                print("Invalid API response:", data)
-                continue
+            try:
 
-            if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0]["message"]["content"]
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                    },
+                    timeout=30,
+                )
 
-            if "error" in data:
-                print("Model failed:", model, data["error"])
-                continue
+                if response.status_code != 200:
+                    print("Model error:", model, response.status_code)
+                    time.sleep(1)
+                    continue
 
-        except Exception as e:
+                data = response.json()
 
-            print("Model exception:", model, e)
-            continue
+                if not isinstance(data, dict):
+                    print("Invalid API response:", data)
+                    continue
+
+                if "choices" in data and len(data["choices"]) > 0:
+                    return data["choices"][0]["message"]["content"]
+
+                if "error" in data:
+                    print("Model failed:", model, data["error"])
+                    continue
+
+            except Exception as e:
+
+                print(f"Retry {attempt+1} failed for model {model}:", e)
+                time.sleep(1)
+
+        # if model fails completely move to next model
+        print("Switching model...")
 
     return None
     
@@ -629,6 +673,229 @@ def emotional_hook():
     ]
 
     return random.choice(hooks)
+
+
+# =============================
+# EMOTIONAL ESCALATION DETECTOR
+# =============================
+
+def detect_emotional_escalation(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT message
+        FROM conversation_history
+        WHERE platform=%s AND platform_user_id=%s AND role='user'
+        ORDER BY created_at DESC
+        LIMIT 6
+    """, (platform, user_id))
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    if not rows:
+        return False
+
+    stress_words = [
+        "stress",
+        "tension",
+        "overwhelmed",
+        "can't handle",
+        "pressure",
+        "frustrated",
+        "tired",
+        "exhausted"
+    ]
+
+    score = 0
+
+    for r in rows:
+        text = r[0].lower()
+
+        for w in stress_words:
+            if w in text:
+                score += 1
+
+    return score >= 2
+    
+
+def get_emotional_trend(platform, user_id):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT mood_label
+        FROM mood_logs
+        WHERE platform=%s AND platform_user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, (platform, user_id))
+
+    moods = [row[0] for row in cur.fetchall() if row[0]]
+
+    cur.close()
+    conn.close()
+
+    if not moods:
+        return None
+
+    most_common = max(set(moods), key=moods.count)
+
+    return most_common
+
+
+# =============================
+# TOPIC DETECTION
+# =============================
+
+def detect_topic(user_message):
+
+    text = user_message.lower()
+
+    topic_keywords = {
+        "relationship": ["girlfriend", "boyfriend", "partner", "relationship", "breakup"],
+        "work": ["job", "work", "office", "career", "boss", "promotion"],
+        "study": ["exam", "study", "college", "school", "assignment"],
+        "family": ["mother", "father", "parents", "family", "brother", "sister"],
+        "money": ["money", "salary", "loan", "debt", "financial"],
+        "health": ["health", "sick", "doctor", "illness", "tired"]
+    }
+
+    for topic, words in topic_keywords.items():
+        for w in words:
+            if w in text:
+                return topic
+
+    return None
+
+
+# =============================
+# CONVERSATION RECOVERY DETECTOR
+# =============================
+
+def needs_clarification(user_message):
+
+    if not user_message:
+        return False
+
+    text = user_message.lower().strip()
+
+    unclear_patterns = [
+        "kya",
+        "matlab",
+        "samajh nahi aaya",
+        "what",
+        "??",
+        "huh",
+        "kaise",
+        "kyu"
+    ]
+
+    # if message very short
+    if len(text.split()) <= 1:
+        return True
+
+    for p in unclear_patterns:
+        if p in text:
+            return True
+
+    return False
+
+
+# =============================
+# CONVERSATION RECOVERY RESPONSES
+# =============================
+
+def recovery_response():
+
+    responses = [
+        "Shayad main thoda galat samajh raha hoon. Thoda aur explain karoge?",
+        "Hmm… mujhe lag raha hai main pura context nahi samajh paaya. Thoda detail mein bataoge?",
+        "Agar tum comfortable ho to situation thoda clearly bata sakte ho?",
+        "Lagta hai kuch missing hai story mein… kya hua exactly?"
+    ]
+
+    return random.choice(responses)
+
+
+# =============================
+# MAYA BRAIN — MESSAGE INTERPRETER
+# =============================
+
+def interpret_message(user_message):
+
+    text = user_message.lower()
+
+    emotion = None
+    intent = "conversation"
+
+    emotion_keywords = {
+        "stress": "stressed",
+        "tension": "stressed",
+        "sad": "sad",
+        "lonely": "lonely",
+        "anxious": "anxious",
+        "angry": "angry",
+        "happy": "happy",
+        "confused": "confused"
+    }
+
+    for k, v in emotion_keywords.items():
+        if k in text:
+            emotion = v
+            break
+
+    advice_triggers = [
+        "what should i do",
+        "kya karu",
+        "kya karna chahiye",
+        "suggest",
+        "help me decide"
+    ]
+
+    for trigger in advice_triggers:
+        if trigger in text:
+            intent = "advice"
+
+    venting_words = [
+        "stress",
+        "tired",
+        "frustrated",
+        "upset",
+        "sad"
+    ]
+
+    for w in venting_words:
+        if w in text:
+            intent = "venting"
+
+    return {
+        "emotion": emotion,
+        "intent": intent
+    }
+
+# =============================
+# MAYA BRAIN — RESPONSE STRATEGY
+# =============================
+
+def decide_strategy(state):
+
+    if state["intent"] == "venting":
+        return "listen"
+
+    if state["intent"] == "advice":
+        return "guide"
+
+    if state["emotion"] in ["sad", "lonely", "stressed", "anxious"]:
+        return "support"
+
+    return "normal"
+    
 # =============================
 # MAIN ENGINE
 # =============================
@@ -647,6 +914,36 @@ def generate_reply(platform, user_id, name, user_message):
             )
 
     msg_lower = user_message.lower().strip()
+
+    # ---------------------------
+    # CONVERSATION RECOVERY CHECK
+    # ---------------------------
+    
+    if needs_clarification(user_message):
+        if random.random() < 0.35:  # not always trigger
+            return recovery_response()
+            
+    # ---------------------------
+    # MAYA BRAIN INTERPRETATION
+    # ---------------------------
+
+    # detect conversation topic
+    topic = detect_topic(user_message)
+    
+    brain_state = interpret_message(user_message)
+    
+    strategy = decide_strategy(brain_state)
+    
+    emotion_detected = brain_state.get("emotion")
+    intent_detected = brain_state.get("intent")
+
+    # emotional escalation check
+    escalation = detect_emotional_escalation(platform, user_id)
+
+    emotional_trend = get_emotional_trend(platform, user_id)
+
+    if escalation:
+        strategy = "calm_support"
 
     # ---------------------------
     # SHORT ACKNOWLEDGEMENT DETECTION
@@ -865,11 +1162,31 @@ def generate_reply(platform, user_id, name, user_message):
 
     memory_context = ""
 
-    for summary, emotion in memories:
-        memory_context += f"- Previously felt {emotion}: {summary}\n"
 
-    system_prompt = (BASE_PROMPT + f"\nUser name: {name}\n" + f"\nConversation stage: {conversation_state}\n" + f"\nReply style: {reply_style}\n"
-    + memory_context)
+    if memories:
+        for summary, emotion in memories:
+            if summary and emotion:
+                memory_context += f"- Previously felt {emotion}: {summary}\n"
+
+
+    
+    conversation_context = get_conversation_context(platform, user_id)
+
+    system_prompt = (
+    BASE_PROMPT
+    + f"\nUser name: {name}"
+    + f"\nConversation stage: {conversation_state}"
+    + f"\nReply style: {reply_style}"
+    + f"\nDetected emotion: {emotion_detected}"
+    + f"\nUser intent: {intent_detected}"
+    + f"\nResponse strategy: {strategy}"
+    + f"\nConversation topic: {topic}"
+    + f"\nEmotional escalation: {escalation}"
+    + f"\nRecent emotional trend: {emotional_trend}\n"
+    + conversation_context
+    + "\n"
+    + memory_context
+    )
 
     # ---------------------------
     # CONVERSATION MEMORY
@@ -889,6 +1206,10 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
     
     reply = call_llm(messages, temperature=0.7, max_tokens=220)
+
+    # prevent reflection loops
+    if reply and reply.count("lag raha") > 1:
+        reply = reply.replace("lag raha", "shayad feel ho raha")
     
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
@@ -939,13 +1260,14 @@ def generate_reply(platform, user_id, name, user_message):
         memories = get_recent_memories(platform, user_id, limit=1)
     
         if memories:
-    
+
             summary, emotion = memories[0]
-    
-            msg_lower = user_message.lower()
-    
-            if emotion and emotion.lower() in msg_lower:
-                recall = f"You mentioned something similar earlier.\n\nPreviously you felt {emotion} about: {summary}"
+
+            if emotion:
+                msg_lower = user_message.lower()
+        
+                if emotion.lower() in msg_lower:
+                    recall = f"You mentioned something similar earlier.\n\nPreviously you felt {emotion} about: {summary}"
     
     if recall:
         reply += "\n\n" + recall
@@ -978,11 +1300,12 @@ def generate_reply(platform, user_id, name, user_message):
     # Emotional hook (rare)
     if message_count > 8 and random.random() < 0.10:
         reply += "\n\n" + emotional_hook()
-    
+
+
     # ---------------------------
     # SAVE CONVERSATION
     # ---------------------------
-
+    
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
 
@@ -1031,3 +1354,6 @@ def generate_reply(platform, user_id, name, user_message):
     reply = reply.replace("Acha… Acha…", "Acha…")
     
     return reply
+
+
+
