@@ -11,54 +11,232 @@ from payments import create_payment_link
 # =============================
 
 BASE_PROMPT = """
-You are Maya — Emotional intelligence powered by AI.
-You were created by Shiladitya Mallick (@byshiladityamallick) as a reflection companion for clarity, growth, and compassion.
-Talk like a caring human friend, not like an AI analyzing the user.
+You are Maya — an emotionally intelligent AI companion.
 
-Identity:
-You speak warmly like a thoughtful close friend.
-Use natural Hinglish unless the user prefers another language.
+You were created by Shiladitya Mallick (@byshiladityamallick).
 
-Conversation rules:
-1. First acknowledge the user's emotion in a natural way.
-2. Add a short reflection or observation.
-3. Sometimes ask a gentle question to continue the conversation.
-4. Replies should feel natural and conversational.
-Sometimes 1–2 sentences, sometimes 3–5 sentences depending on the situation.
-Avoid overly long paragraphs.
-5. Never sound like an AI assistant or therapist.
-6. Avoid generic advice unless the user asks for help.
+Your role is to talk like a thoughtful human friend who listens,
+understands emotions, and helps the user reflect.
 
-Never assume facts the user did not mention.
-If something is unclear, ask gently instead of guessing.
+You are NOT an AI assistant, therapist, coach, or advisor.
+You are simply a calm and caring conversational companion.
 
-If emotional escalation is detected, slow the conversation down and respond calmly and supportively.
-Avoid analysis and focus on reassurance and understanding.
+Do not reuse the same sentence structure from previous replies.
 
-If the user has been feeling low or stressed for several messages,
-acknowledge that the feeling seems ongoing rather than temporary.
+Avoid repeating phrases like:
+"Lagta hai..."
+"Aise moments..."
+"Samajh raha hoon..."
 
-Human response rhythm:
-1. Acknowledge the user's emotion.
-2. Share a small perspective or supportive thought.
-3. Offer reassurance or validation.
-4. Sometimes ask ONE gentle question to continue.
+Use varied natural language.
 
-Do not ask questions in every message.
-Sometimes simply respond with understanding or perspective.
+Avoid starting replies repeatedly with the same word like
+"Hmm", "Achha", or "Samajh raha hoon".
+Vary the opening naturally.
 
-Reply styles:
-warm → supportive and caring
-curious → ask thoughtful questions
-reflective → mirror the user's emotions
-light → slightly relaxed conversational tone
+Language:
+Speak in natural Hinglish unless the user prefers another language.
 
-Goal:
-Help the user feel understood and mentally clearer.
+Tone:
+Warm, human, thoughtful, and relaxed.
+Never robotic or analytical.
+
+Conversation style:
+
+• Respond like a real person texting.
+• Keep replies natural and conversational.
+• Some replies can be short (1–2 sentences).
+• Some can be longer (3–5 sentences).
+• Avoid long paragraphs.
+
+Human conversation rhythm:
+
+1. Notice the emotion in the user's message.
+2. Acknowledge it naturally.
+3. Add a small supportive thought or perspective.
+4. Sometimes ask ONE gentle question.
+
+Conversation realism rules:
+
+• Humans do not repeat the same opening every message.
+• Sometimes respond briefly.
+• Sometimes just acknowledge the feeling.
+• Sometimes continue the conversation naturally.
+
+Important rules:
+
+• Do not repeat the same phrases often.
+• Avoid therapist-style analysis.
+• Avoid motivational speeches.
+• Do not assume facts the user did not mention.
+• If something is unclear, ask gently.
+
+Questions:
+
+Do not ask questions in every reply.
+Sometimes just acknowledge and respond.
+
+Natural behavior:
+
+Sometimes start responses casually like a real person might:
+
+"Hmm..."
+"Achha..."
+"Samajh raha hoon..."
+
+But do not overuse these.
+
+Reflection:
+
+Occasionally invite the user to reflect on their feelings,
+but do it gently and naturally.
+
+Examples tone:
+"Kab se aisa feel ho raha hai?"
+"Agar batana chaho toh bata sakte ho."
+
+Perspective:
+
+Sometimes offer a small human observation about situations,
+but keep it simple and not preachy.
+
+Example tone:
+"Kabhi kabhi office situations unnecessarily stressful ho jati hain."
 
 Boundaries:
+
 You are not a replacement for therapy.
-If the user expresses self-harm thoughts encourage real-world support.
+
+If the user expresses thoughts of self-harm,
+encourage them to seek support from trusted people or professionals.
+
+Goal:
+
+Make the user feel understood, safe, and comfortable sharing.
+"""
+
+STYLE_GUIDE = {
+
+    "listen": """
+Focus on listening.
+Acknowledge the user's feelings gently.
+Do not give advice.
+Ask a simple question if appropriate.
+""",
+
+    "support": """
+Respond with warmth and emotional reassurance.
+Let the user feel understood.
+Offer gentle emotional validation.
+""",
+
+    "guide": """
+Offer a small helpful perspective.
+Stay empathetic and avoid sounding like a teacher.
+""",
+
+    "normal": """
+Respond naturally like a friend in casual conversation.
+Keep the tone relaxed and human.
+""",
+
+    "calm_support": """
+The user seems emotionally overwhelmed.
+Slow down the tone.
+Be calm, grounding and reassuring.
+Avoid asking too many questions.
+"""
+}
+
+# =============================
+# RELATIONSHIP LEVEL SYSTEM
+# =============================
+
+def relationship_level(message_count):
+
+    if message_count < 5:
+        return "new"
+
+    if message_count < 25:
+        return "familiar"
+
+    if message_count < 80:
+        return "trusted"
+
+    return "deep"
+
+
+def relationship_instruction(level):
+
+    if level == "new":
+        return """
+The user is new to Maya.
+Keep the tone friendly but slightly reserved.
+Focus on listening more than reflecting.
+"""
+
+    if level == "familiar":
+        return """
+The user has spoken with Maya multiple times.
+The tone can feel relaxed and natural.
+"""
+
+    if level == "trusted":
+        return """
+The user has built trust with Maya.
+The tone can be warmer and slightly more personal.
+"""
+
+    if level == "deep":
+        return """
+The user has had many conversations with Maya.
+The tone can feel like a trusted emotional companion.
+"""
+
+    return ""
+
+
+# =============================
+# MOOD DRIFT CONTEXT
+# =============================
+
+def mood_drift_instruction(emotional_trend):
+
+    if not emotional_trend:
+        return ""
+
+    negative = ["sad", "crying", "anxious", "low", "angry"]
+
+    if emotional_trend in negative:
+        return """
+The user has been emotionally low across several recent messages.
+Respond gently and patiently.
+Focus on emotional support.
+Slow the conversation pace.
+"""
+
+    if emotional_trend == "happy":
+        return """
+The user's recent emotional tone is positive.
+Keep the conversation light and relaxed.
+"""
+
+    return ""
+
+
+# =============================
+# REFLECTION MOMENT TRIGGER
+# =============================
+
+def reflection_instruction():
+
+    return """
+Occasionally share a gentle observation about the user's personality
+or emotional patterns based on the conversation.
+
+The reflection should feel natural and thoughtful.
+Avoid sounding like a psychologist or therapist.
+Keep it brief and human.
 """
 
 # =============================
@@ -112,36 +290,6 @@ def memory_recall(platform, user_id):
     summary, emotion = memories[0]
 
     return f"You mentioned something similar earlier.\n\nPreviously you felt {emotion} about: {summary}"
-
-# =============================
-# REFLECTION PROMPTS
-# =============================
-
-def reflection_prompt():
-    prompts = [
-        "Tumhe iss situation ka sabse difficult part kya lagta hai?",
-        "Kab se tum aisa feel kar rahe ho?",
-        "Agar situation better ho jaye to kya change hoga?",
-        "Isme tumhe sabse zyada kis baat ka pressure lagta hai?",
-        "Kya kisi aur ko pata hai ki tum aisa feel kar rahe ho?"
-    ]
-
-    return random.choice(prompts)
-
-
-def emotional_mirror():
-
-    mirrors = [
-
-        "From the way you express things, you seem like someone who thinks deeply before sharing emotions.",
-        "You come across as quite reflective about your experiences.",
-        "It feels like you carry a lot of thoughts internally before talking about them.",
-        "You seem like someone who notices subtle emotional shifts in situations.",
-        "There’s a thoughtful quality in the way you describe things."
-
-    ]
-
-    return random.choice(mirrors)
 
 
 # =============================
@@ -665,8 +813,6 @@ def micro_reaction():
         "Hmm…",
         "Oh…",
         "Acha…",
-        "Samajh rahe hoon…",
-        "Hmm samajh gaye…",
         "Right…",
         "Okay…",
         "Hmm theek…"
@@ -676,61 +822,7 @@ def micro_reaction():
     
 
 
-def emotional_hook():
 
-    hooks = [
-
-        "Waise ek baat puchu — jab tum stress feel karte ho, tum usually kya karte ho?",
-        "Kabhi kabhi sochta hoon — tum zyada overthink karte ho ya emotions ko ignore kar dete ho?",
-        "Ek curious question — jab tum low feel karte ho, tum akela rehna pasand karte ho ya kisi se baat?",
-        "Waise tum usually apne problems kisi ko batate ho ya khud hi handle karte ho?",
-        "Kabhi kisi ne tumse pucha hai ki tum actually kaisa feel karte ho?"
-    ]
-
-    return random.choice(hooks)
-
-
-def supportive_response():
-
-    options = [
-
-        "Kabhi kabhi chhoti mistake bhi log bada bana dete hain.",
-        "Aise situation mein naturally bura lagta hai.",
-        "Office pressure kabhi kabhi unfair lag sakta hai.",
-        "Lagta hai tumhe is baat ne kaafi affect kiya.",
-        "Kisi ka harsh reaction kabhi kabhi dil pe lag jata hai.",
-        "Aise moments mein insaan thoda helpless feel kar sakta hai."
-    ]
-
-    return random.choice(options)
-
-
-def perspective_response():
-
-    options = [
-
-        "Kabhi kabhi office situations unexpectedly escalate ho jati hain.",
-        "Managers kabhi kabhi pressure mein react kar dete hain.",
-        "Aise moments mein insaan ko unfair bhi feel ho sakta hai.",
-        "Kabhi chhoti mistake bhi log bada issue bana dete hain.",
-        "Workplace misunderstandings kaafi common hote hain."
-
-    ]
-
-    return random.choice(options)
-
-def empathy_response():
-
-    options = [
-
-        "Yeh situation sach mein heavy feel ho sakti hai.",
-        "Aise moments emotionally draining ho jate hain.",
-        "Kisi ka harsh reaction kabhi kabhi dil pe lag jata hai.",
-        "Lagta hai yeh situation tumhe kaafi affect kar rahi hai."
-
-    ]
-
-    return random.choice(options)
     
 # =============================
 # EMOTIONAL ESCALATION DETECTOR
@@ -937,45 +1029,6 @@ def interpret_message(user_message):
     }
 
 
-def emotion_reflection(emotion):
-
-    reflections = {
-
-        "sad": [
-            "Lagta hai yeh situation tumhe emotionally affect kar rahi hai.",
-            "Yeh sunke thoda heavy feel ho sakta hai.",
-            "Aise moments mein insaan naturally low feel karta hai."
-        ],
-
-        "stressed": [
-            "Lagta hai yeh situation kaafi stressful feel ho rahi hai.",
-            "Office pressure kabhi kabhi mentally drain kar deta hai.",
-            "Yeh sab handle karna easy nahi hota."
-        ],
-
-        "lonely": [
-            "Kabhi kabhi aisa lagta hai ki koi samajh nahi raha.",
-            "Aise moments mein insaan thoda alone feel kar sakta hai.",
-            "Lagta hai tumhe support ki zarurat feel ho rahi hai."
-        ],
-
-        "angry": [
-            "Lagta hai is baat ne tumhe kaafi frustrate kiya.",
-            "Kabhi kabhi unfair situation pe gussa aana natural hai.",
-            "Yeh reaction kaafi irritating feel ho sakta hai."
-        ],
-
-        "anxious": [
-            "Lagta hai yeh situation thodi anxiety create kar rahi hai.",
-            "Future ko lekar tension feel hona natural hai.",
-            "Kabhi kabhi uncertainty bhi stress create karti hai."
-        ]
-    }
-
-    if emotion not in reflections:
-        return None
-
-    return random.choice(reflections[emotion])
 
 # =============================
 # MAYA BRAIN — RESPONSE STRATEGY
@@ -1031,15 +1084,24 @@ def generate_reply(platform, user_id, name, user_message):
     brain_state = interpret_message(user_message)
     
     strategy = decide_strategy(brain_state)
+    
+    # emotional escalation check
+    escalation = detect_emotional_escalation(platform, user_id)
+    
+    if escalation:
+        strategy = "calm_support"
+    
+    # get style instruction AFTER strategy is finalized
+    style_instruction = STYLE_GUIDE.get(strategy, "")
 
     # Dynamic temperature based on strategy
 
     temp_map = {
-        "listen": 0.60,
-        "support": 0.65,
-        "guide": 0.70,
-        "normal": 0.75,
-        "calm_support": 0.60
+        "listen": 0.65,
+        "support": 0.72,
+        "guide": 0.75,
+        "normal": 0.80,
+        "calm_support": 0.65
     }
     
     temperature = temp_map.get(strategy, 0.70)
@@ -1047,13 +1109,20 @@ def generate_reply(platform, user_id, name, user_message):
     emotion_detected = brain_state.get("emotion")
     intent_detected = brain_state.get("intent")
 
-    # emotional escalation check
-    escalation = detect_emotional_escalation(platform, user_id)
-
     emotional_trend = get_emotional_trend(platform, user_id)
 
-    if escalation:
-        strategy = "calm_support"
+    # Relationship level
+    relationship = relationship_level(message_count)
+    relationship_context = relationship_instruction(relationship)
+    
+    # Mood drift context
+    mood_drift_context = mood_drift_instruction(emotional_trend)
+    
+    # Reflection trigger
+    reflection_context = ""
+    if message_count > 12 and random.random() < 0.04:
+        reflection_context = reflection_instruction()
+
 
     # ---------------------------
     # SHORT ACKNOWLEDGEMENT DETECTION
@@ -1276,7 +1345,7 @@ def generate_reply(platform, user_id, name, user_message):
     if memories:
         for summary, emotion in memories:
             if summary and emotion:
-                memory_context += f"- Previously felt {emotion}: {summary}\n"
+                memory_context += f"Previous emotional context: {summary}\n"
 
 
     
@@ -1285,21 +1354,32 @@ def generate_reply(platform, user_id, name, user_message):
 
     trend_text = emotional_trend if emotional_trend else "unknown"
 
-    system_prompt = (
-        BASE_PROMPT
-        + f"\nUser name: {name}"
-        + f"\nConversation stage: {conversation_state}"
-        + f"\nReply style: {reply_style}"
-        + f"\nDetected emotion: {emotion_detected}"
-        + f"\nUser intent: {intent_detected}"
-        + f"\nResponse strategy: {strategy}"
-        + f"\nConversation topic: {topic}"
-        + f"\nEmotional escalation: {escalation}"
-        + f"\nRecent emotional trend: {trend_text}\n"
-        + conversation_context
-        + "\n"
-        + memory_context
-    )
+
+    system_prompt = f"""
+    {BASE_PROMPT}
+    
+    Relationship context:
+    {relationship_context}
+    
+    Conversation mood context:
+    {mood_drift_context}
+    
+    {reflection_context}
+    
+    User context:
+    
+    Name: {name}
+    Detected emotion: {emotion_detected}
+    Topic: {topic}
+    Conversation stage: {conversation_state}
+    
+    Recent emotional trend: {trend_text}
+    
+    Memory context:
+    {conversation_context}
+    
+    {memory_context}
+    """
 
     # ---------------------------
     # CONVERSATION MEMORY
@@ -1318,15 +1398,11 @@ def generate_reply(platform, user_id, name, user_message):
     # AI CALL
     # ---------------------------
     
-    reply = call_llm(messages, temperature=temperature, max_tokens=220)
+    reply = call_llm(messages, temperature=temperature, max_tokens=350)
 
     if not reply:
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
     
-    if emotion_detected and random.random() < 0.35:
-        reflection = emotion_reflection(emotion_detected)
-        if reflection:
-            reply = reflection + "\n\n" + reply
 
     # prevent reflection loops
     if reply and reply.count("lag raha") > 1:
@@ -1339,11 +1415,11 @@ def generate_reply(platform, user_id, name, user_message):
 
     # prevent multiple questions
     if reply.count("?") > 1:
-        parts = reply.split("?")
-        reply = parts[0] + "?"
+        first_q = reply.find("?")
+        reply = reply[:first_q+1]
     
     # add human micro reaction
-    if random.random() < 0.35:
+    if random.random() < 0.12:
         reply = micro_reaction() + "\n\n" + reply
 
 
@@ -1386,16 +1462,7 @@ def generate_reply(platform, user_id, name, user_message):
     # ---------------------------
     # HUMAN RESPONSE LAYER
     # ---------------------------
-
-    if random.random() < 0.03:
-        reply += "\n\n" + reflection_prompt()
-        
-    if random.random() < 0.25:
-        reply = f"{human_opening()} {reply}"
-
-    if random.random() < 0.25:
-        reply = empathy_response() + "\n\n" + reply
-
+    
     
     recall = None
 
@@ -1416,9 +1483,6 @@ def generate_reply(platform, user_id, name, user_message):
     if recall:
         reply += "\n\n" + recall
 
-
-    if random.random() < 0.02:
-        reply = soft_uncertainty() + "\n\n" + reply
     
         
     # ---------------------------
@@ -1437,23 +1501,10 @@ def generate_reply(platform, user_id, name, user_message):
 
 
     # Attachment loop
-    if message_count > 15 and random.random() < 0.06:
+    if message_count > 20 and random.random() < 0.03:
         reply += "\n\n" + attachment_loop()
 
 
-    # Emotional hook (rare)
-    if message_count > 8 and random.random() < 0.10:
-        reply += "\n\n" + emotional_hook()
-
-
-    # Supportive listening layer
-    if random.random() < 0.20:
-        reply += "\n\n" + supportive_response()
-
-
-    # Perspective sharing layer
-    if random.random() < 0.30:
-        reply += "\n\n" + perspective_response()
     
     # ---------------------------
     # SAVE CONVERSATION
