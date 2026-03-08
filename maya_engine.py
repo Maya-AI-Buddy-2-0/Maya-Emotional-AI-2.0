@@ -946,7 +946,7 @@ def needs_clarification(user_message):
     ]
 
     # if message very short
-    if len(text.split()) <= 1:
+    if len(text.split()) <= 1 and text not in ["ok","hmm","yes","haan","right"]:
         return True
 
     for p in unclear_patterns:
@@ -1111,17 +1111,7 @@ def generate_reply(platform, user_id, name, user_message):
 
     emotional_trend = get_emotional_trend(platform, user_id)
 
-    # Relationship level
-    relationship = relationship_level(message_count)
-    relationship_context = relationship_instruction(relationship)
-    
-    # Mood drift context
-    mood_drift_context = mood_drift_instruction(emotional_trend)
-    
-    # Reflection trigger
-    reflection_context = ""
-    if message_count > 12 and random.random() < 0.04:
-        reflection_context = reflection_instruction()
+   
 
 
     # ---------------------------
@@ -1212,16 +1202,17 @@ def generate_reply(platform, user_id, name, user_message):
 
         cur.execute(
             """
-            INSERT INTO users (platform, platform_user_id, name)
-            VALUES (%s,%s,%s)
+            INSERT INTO users (platform, platform_user_id, name, last_reset)
+            VALUES (%s,%s,%s,%s)
             """,
-            (platform, user_id, name),
+            (platform, user_id, name, date.today()),
         )
 
         conn.commit()
 
         message_count = 0
         is_premium = False
+        conversation_state = "early"
 
     else:
 
@@ -1233,13 +1224,13 @@ def generate_reply(platform, user_id, name, user_message):
         
         conversation_state = "normal"
         
-        if message_count < 5:
+        if message_count < 10:
             conversation_state = "early"
         
-        elif message_count < 20:
+        elif message_count < 30:
             conversation_state = "engaged"
         
-        elif message_count < 50:
+        elif message_count < 100:
             conversation_state = "deep"
         
         else:
@@ -1258,6 +1249,18 @@ def generate_reply(platform, user_id, name, user_message):
 
             conn.commit()
             message_count = 0
+
+    # Relationship system
+    relationship = relationship_level(message_count)
+    relationship_context = relationship_instruction(relationship)
+    
+    # Mood drift
+    mood_drift_context = mood_drift_instruction(emotional_trend)
+    
+    # Reflection trigger
+    reflection_context = ""
+    if message_count > 20 and random.random() < 0.03:
+        reflection_context = reflection_instruction()
 
 
     # ---------------------------
@@ -1357,12 +1360,27 @@ def generate_reply(platform, user_id, name, user_message):
 
     system_prompt = f"""
     {BASE_PROMPT}
+
+    Do not structure replies like advice or analysis.
+    Respond like a human texting naturally.
+    Sometimes incomplete sentences are okay.
+    
+    Use previous conversation messages to understand emotional context.
+    
+    Conversation strategy:
+    {strategy}
+    
+    Strategy instruction:
+    {style_instruction}
     
     Relationship context:
     {relationship_context}
     
     Conversation mood context:
     {mood_drift_context}
+
+    Reply style:
+    {reply_style}
     
     {reflection_context}
     
