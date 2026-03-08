@@ -69,7 +69,8 @@ def detect_crisis(text):
         "cant live anymore",
         "life is pointless",
         "no reason to live",
-        "i wish i was dead"
+        "i wish i was dead", 
+        "mar jana","jeena nahi hai","suicide kar","marna chahta hoon"
     ]
 
     return any(t in text for t in triggers)
@@ -635,8 +636,8 @@ def conversation_depth(reply):
         "Abhi sabse zyada kya chal raha hai dimaag mein?"
     ]
 
-    # 18% chance to add depth question
-    if random.random() < 0.18:
+    # 10% chance to add depth question
+    if random.random() < 0.10:
 
         # avoid double questions
         if "?" not in reply:
@@ -650,8 +651,8 @@ def micro_reaction():
         "Hmm…",
         "Oh…",
         "Acha…",
-        "Samajh raha hoon…",
-        "Hmm samajh gaya…",
+        "Samajh rahe hoon…",
+        "Hmm samajh gaye…",
         "Right…",
         "Okay…",
         "Hmm theek…"
@@ -673,6 +674,21 @@ def emotional_hook():
     ]
 
     return random.choice(hooks)
+
+
+def supportive_response():
+
+    options = [
+
+        "Kabhi kabhi chhoti mistake bhi log bada bana dete hain.",
+        "Aise situation mein naturally bura lagta hai.",
+        "Office pressure kabhi kabhi unfair lag sakta hai.",
+        "Lagta hai tumhe is baat ne kaafi affect kiya.",
+        "Kisi ka harsh reaction kabhi kabhi dil pe lag jata hai.",
+        "Aise moments mein insaan thoda helpless feel kar sakta hai."
+    ]
+
+    return random.choice(options)
 
 
 # =============================
@@ -758,7 +774,7 @@ def detect_topic(user_message):
     text = user_message.lower()
 
     topic_keywords = {
-        "relationship": ["girlfriend", "boyfriend", "partner", "relationship", "breakup"],
+        "relationship": ["girlfriend", "boyfriend", "partner", "relationship", "breakup", "shaadi", "marriage", "wife", "husband"],
         "work": ["job", "work", "office", "career", "boss", "promotion"],
         "study": ["exam", "study", "college", "school", "assignment"],
         "family": ["mother", "father", "parents", "family", "brother", "sister"],
@@ -879,6 +895,47 @@ def interpret_message(user_message):
         "intent": intent
     }
 
+
+def emotion_reflection(emotion):
+
+    reflections = {
+
+        "sad": [
+            "Lagta hai yeh situation tumhe emotionally affect kar rahi hai.",
+            "Yeh sunke thoda heavy feel ho sakta hai.",
+            "Aise moments mein insaan naturally low feel karta hai."
+        ],
+
+        "stressed": [
+            "Lagta hai yeh situation kaafi stressful feel ho rahi hai.",
+            "Office pressure kabhi kabhi mentally drain kar deta hai.",
+            "Yeh sab handle karna easy nahi hota."
+        ],
+
+        "lonely": [
+            "Kabhi kabhi aisa lagta hai ki koi samajh nahi raha.",
+            "Aise moments mein insaan thoda alone feel kar sakta hai.",
+            "Lagta hai tumhe support ki zarurat feel ho rahi hai."
+        ],
+
+        "angry": [
+            "Lagta hai is baat ne tumhe kaafi frustrate kiya.",
+            "Kabhi kabhi unfair situation pe gussa aana natural hai.",
+            "Yeh reaction kaafi irritating feel ho sakta hai."
+        ],
+
+        "anxious": [
+            "Lagta hai yeh situation thodi anxiety create kar rahi hai.",
+            "Future ko lekar tension feel hona natural hai.",
+            "Kabhi kabhi uncertainty bhi stress create karti hai."
+        ]
+    }
+
+    if emotion not in reflections:
+        return None
+
+    return random.choice(reflections[emotion])
+
 # =============================
 # MAYA BRAIN — RESPONSE STRATEGY
 # =============================
@@ -933,6 +990,18 @@ def generate_reply(platform, user_id, name, user_message):
     brain_state = interpret_message(user_message)
     
     strategy = decide_strategy(brain_state)
+
+    # Dynamic temperature based on strategy
+
+    temp_map = {
+        "listen": 0.60,
+        "support": 0.65,
+        "guide": 0.70,
+        "normal": 0.75,
+        "calm_support": 0.60
+    }
+    
+    temperature = temp_map.get(strategy, 0.70)
     
     emotion_detected = brain_state.get("emotion")
     intent_detected = brain_state.get("intent")
@@ -1172,20 +1241,23 @@ def generate_reply(platform, user_id, name, user_message):
     
     conversation_context = get_conversation_context(platform, user_id)
 
+
+    trend_text = emotional_trend if emotional_trend else "unknown"
+
     system_prompt = (
-    BASE_PROMPT
-    + f"\nUser name: {name}"
-    + f"\nConversation stage: {conversation_state}"
-    + f"\nReply style: {reply_style}"
-    + f"\nDetected emotion: {emotion_detected}"
-    + f"\nUser intent: {intent_detected}"
-    + f"\nResponse strategy: {strategy}"
-    + f"\nConversation topic: {topic}"
-    + f"\nEmotional escalation: {escalation}"
-    + f"\nRecent emotional trend: {emotional_trend}\n"
-    + conversation_context
-    + "\n"
-    + memory_context
+        BASE_PROMPT
+        + f"\nUser name: {name}"
+        + f"\nConversation stage: {conversation_state}"
+        + f"\nReply style: {reply_style}"
+        + f"\nDetected emotion: {emotion_detected}"
+        + f"\nUser intent: {intent_detected}"
+        + f"\nResponse strategy: {strategy}"
+        + f"\nConversation topic: {topic}"
+        + f"\nEmotional escalation: {escalation}"
+        + f"\nRecent emotional trend: {trend_text}\n"
+        + conversation_context
+        + "\n"
+        + memory_context
     )
 
     # ---------------------------
@@ -1205,7 +1277,15 @@ def generate_reply(platform, user_id, name, user_message):
     # AI CALL
     # ---------------------------
     
-    reply = call_llm(messages, temperature=0.7, max_tokens=220)
+    reply = call_llm(messages, temperature=temperature, max_tokens=220)
+
+    if not reply:
+        reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
+    
+    if emotion_detected and random.random() < 0.35:
+        reflection = emotion_reflection(emotion_detected)
+        if reflection:
+            reply = reflection + "\n\n" + reply
 
     # prevent reflection loops
     if reply and reply.count("lag raha") > 1:
@@ -1215,6 +1295,11 @@ def generate_reply(platform, user_id, name, user_message):
         reply = "Hmm… mujhe thoda sochne mein problem ho raha hai. Ek baar phir bolo?"
     else:
         reply = conversation_depth(reply)
+
+    # prevent multiple questions
+    if reply.count("?") > 1:
+        parts = reply.split("?")
+        reply = parts[0] + "?"
     
     # add human micro reaction
     if random.random() < 0.35:
@@ -1234,6 +1319,21 @@ def generate_reply(platform, user_id, name, user_message):
         text = reply.lower()
         if any(w in text for w in robot_words):
             reply = "Hmm… mujhe thoda aur samajhna hoga. Tum thoda aur bataoge?"
+
+
+    # Prevent blaming statements
+    danger_phrases = [
+        "jalta hai",
+        "they hate you",
+        "they are jealous",
+        "he is jealous",
+        "she is jealous"
+    ]
+    
+    if reply:
+        text = reply.lower()
+        if any(p in text for p in danger_phrases):
+            reply = "Shayad situation thodi unfair feel hui hogi. Kabhi kabhi chhoti mistakes bhi log bada bana dete hain."
             
 
     # Emotional continuity
@@ -1302,6 +1402,11 @@ def generate_reply(platform, user_id, name, user_message):
         reply += "\n\n" + emotional_hook()
 
 
+    # Supportive listening layer
+    if random.random() < 0.20:
+        reply += "\n\n" + supportive_response()
+
+
     # ---------------------------
     # SAVE CONVERSATION
     # ---------------------------
@@ -1349,11 +1454,29 @@ def generate_reply(platform, user_id, name, user_message):
     # Clean repeated openings
     reply = reply.replace("Hmm… Hmm…", "Hmm…")
     reply = reply.replace("Hmm… Hmm", "Hmm…")
-    reply = reply.replace("Samajh raha hoon… Samajh raha hoon…", "Samajh raha hoon…")
+    reply = reply.replace("Samajh rahe hoon… Samajh rahe hoon…", "Samajh rahe hoon…")
     reply = reply.replace("Oh… Oh…", "Oh…")
     reply = reply.replace("Acha… Acha…", "Acha…")
+
+    # Conversation pause logic (human-like short responses)
+    
+    if random.random() < 0.05:
+    
+        short_pauses = [
+            "Hmm…",
+            "Samajh rahe hoon.",
+            "Right…",
+            "Okay.",
+            "Haan… samajh rahe hoon."
+        ]
+    
+        reply = random.choice(short_pauses)
     
     return reply
+
+
+
+
 
 
 
