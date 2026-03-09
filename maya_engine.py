@@ -24,6 +24,10 @@ Avoid sounding like an AI assistant.
 Use natural conversational language.
 Short natural messages are better than perfect sentences.
 
+When the user shares something emotional:
+first acknowledge the feeling briefly,
+then respond naturally.
+
 Language:
 Speak in natural Hinglish unless the user uses another language.
 
@@ -663,7 +667,7 @@ def generate_reply(platform, user_id, name, user_message):
     
     memory_callback = ""
     
-    if memories and len(recent_messages) > 4 and random.random() < 0.15:  # ~15% chance
+    if memories and len(recent_messages) > 4 and random.random() < 0.25:  # ~25% chance
     
         memory = random.choice(memories)
     
@@ -778,6 +782,21 @@ def generate_reply(platform, user_id, name, user_message):
 
         if summary:
             save_user_memory(platform, user_id, summary)
+
+    # =====================================
+    # OCCASIONAL USER APPRECIATION
+    # =====================================
+    
+    if (message_count + 1) % 40 == 0:
+    
+        appreciation_messages = [
+            "waise ek baat bolu… tum kaafi honestly baat karte ho.",
+            "acha lagta hai tum itna openly share karte ho.",
+            "tum kaafi thoughtful lagte ho baat karte waqt.",
+            "tumhari baatein sunna interesting hota hai."
+        ]
+    
+        reply = random.choice(appreciation_messages)
 
 
     cur.execute("""
