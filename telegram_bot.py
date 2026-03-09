@@ -1,9 +1,10 @@
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 from telegram import Update
 from telegram.constants import ChatAction
+import random
 
 from config import BOT_TOKEN
-from maya_engine import generate_reply, daily_checkin_message, late_night_checkin_message
+from maya_engine import generate_reply, daily_checkin_message, late_night_checkin_message, proactive_emotional_checkin
 from db import get_db
 
 from datetime import datetime, timedelta, time
