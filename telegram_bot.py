@@ -320,13 +320,13 @@ async def emotional_followup(context):
     conn = get_db()
     cur = conn.cursor()
 
-    threshold = datetime.utcnow() - timedelta(hours=12)
+    threshold = datetime.utcnow() - timedelta(hours=8)
 
     cur.execute("""
         SELECT platform_user_id
         FROM users
         WHERE platform='telegram'
-        AND last_active > %s
+        AND last_active < %s
     """, (threshold,))
 
     users = cur.fetchall()
@@ -347,7 +347,7 @@ async def emotional_followup(context):
 
     cur.close()
     conn.close()
-
+    
 
 # =============================
 # START BOT
