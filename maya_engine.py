@@ -22,6 +22,7 @@ Your responses should feel like texting a real person.
 Respond like a real person texting.
 Avoid sounding like an AI assistant.
 Use natural conversational language.
+Short natural messages are better than perfect sentences.
 
 Language:
 Speak in natural Hinglish unless the user uses another language.
@@ -45,6 +46,9 @@ Important rules:
 • Do not invent details the user did not mention
 • Never assume reasons for the user's feelings
 • Do not repeat the same opening phrases
+• Never invent situations that the user did not mention
+• If the user says something simple like "hi", respond casually
+• Do not continue imaginary conversations
 
 Sometimes ask a gentle question.
 
@@ -366,10 +370,8 @@ Conversation:
 def call_llm(messages):
 
     models = [
-        "arcee-ai/trinity-large-preview:free",
-        "openai/gpt-oss-120b:free",
-        "google/gemma-3-4b-it:free",
-        "meta-llama/llama-3.2-3b-instruct:free"
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "arcee-ai/trinity-large-preview:free"    
     ]
 
     for model in models:
@@ -472,16 +474,7 @@ def generate_reply(platform, user_id, name, user_message):
         )
 
 
-    greetings = ["hi", "hello", "hey", "hii"]
-
-    if msg_lower in greetings and message_count == 0:
-
-        return random.choice([
-            "Hey 🙂 kaisa chal raha hai aaj?",
-            "Hi! Aaj ka din kaisa ja raha hai?",
-            "Hello 🙂 mood kaisa hai?"
-        ])
-
+    
 
     if msg_lower == "trial":
 
@@ -514,6 +507,8 @@ def generate_reply(platform, user_id, name, user_message):
         WHERE platform=%s AND platform_user_id=%s
     """, (platform, user_id))
 
+    
+
     row = cur.fetchone()
 
     if not row:
@@ -543,6 +538,17 @@ def generate_reply(platform, user_id, name, user_message):
             conn.commit()
 
             message_count = 0
+            
+
+        greetings = ["hi", "hello", "hey", "hii"]
+    
+        if msg_lower.startswith(tuple(greetings)) and message_count == 0:
+    
+            return random.choice([
+                "Hey 🙂 kaisa chal raha hai aaj?",
+                "Hi! Aaj ka din kaisa ja raha hai?",
+                "Hello 🙂 mood kaisa hai?"
+            ])
 
 
     if not is_premium and message_count == 20:
@@ -596,22 +602,66 @@ def generate_reply(platform, user_id, name, user_message):
     # =====================================
     
     memories = get_user_memories(platform, user_id)
-    
-    memory_context = "\n".join(memories)
-    
     recent_messages = get_recent_messages(platform, user_id)
+
+    # =====================================
+    # MEMORY CALLBACK (bring up past things)
+    # =====================================
     
+    memory_callback = ""
+    
+    if memories and random.random() < 0.18:   # ~18% chance
+    
+        memory = random.choice(memories)
+    
+        memory_prompt = f"""
+    The user previously mentioned this fact:
+    
+    {memory}
+    
+    Write ONE short casual message checking on it.
+    
+    Rules:
+    - sound natural
+    - Hinglish
+    - 1 sentence
+    - like a friend remembering something
+    """
+    
+        callback_reply = call_llm([
+            {"role": "user", "content": memory_prompt}
+        ])
+    
+        if callback_reply:
+            memory_callback = callback_reply.strip()
     
     system_prompt = BASE_PROMPT + f"""
-    
     Conversation mode:
     {strategy}
     
     Guideline:
     {style_instruction}
     
-    Known facts about user:
-    {memory_context}
+    {memory_block}
+    
+    Possible topic to casually bring up:
+    {memory_callback}
+    """
+
+    reply_styles = [
+        "Respond normally.",
+        "Keep the reply very short.",
+        "Respond casually like WhatsApp chat.",
+        "Use a relaxed friendly tone.",
+        "Sometimes use a small reaction like 'hmm', 'oh', 'acha'."
+    ]
+    
+    style_modifier = random.choice(reply_styles)
+    
+    system_prompt = system_prompt + f"""
+    
+    Reply style instruction:
+    {style_modifier}
     """
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -623,11 +673,24 @@ def generate_reply(platform, user_id, name, user_message):
 
 
     reply = call_llm(messages)
+    
+    # keep max 2 sentences
+    reply = reply.split("\n")[0]
+    if len(reply) > 220:
+        reply = reply[:220]
 
     if not reply:
         reply = "Hmm… thoda network issue lag raha hai. Phir se bolo?"
 
+    # remove repeated blank lines
+    reply = "\n".join([l for l in reply.split("\n") if l.strip()])
 
+    reply = reply.strip()
+
+    # small human texting randomness
+    if random.random() < 0.25:
+        reply += random.choice([" 🙂", " hmm", " acha", " ya", " oh"])
+        
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
 
