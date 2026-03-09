@@ -148,9 +148,17 @@ async def silence_check(context: ContextTypes.DEFAULT_TYPE):
 
         try:
 
+            quiet_messages = [
+                "hey… aaj thoda quiet ho. sab theek?",
+                "bas randomly check kar raha tha… sab ok?",
+                "aaj ka din kaisa tha?",
+                "pata nahi kyun laga poochu… aaj mood kaisa hai?",
+                "kaafi din se baat nahi hui… sab theek chal raha hai?"
+            ]
+            
             await context.bot.send_message(
                 chat_id=user_id,
-                text="Hey… thoda quiet ho gaye ho. Sab theek hai? 💛"
+                text=random.choice(quiet_messages)
             )
 
             cur.execute("""
