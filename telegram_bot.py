@@ -168,6 +168,7 @@ async def silence_check(context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
 
+
 # =============================
 # WEEKLY MOOD SUMMARY
 # =============================
@@ -308,6 +309,45 @@ async def late_night_checkin(context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
+
+# =============================
+# EMOTIONAL FOLLOWUP CHECKIN
+# =============================
+
+async def emotional_followup(context):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    threshold = datetime.utcnow() - timedelta(hours=12)
+
+    cur.execute("""
+        SELECT platform_user_id
+        FROM users
+        WHERE platform='telegram'
+        AND last_active > %s
+    """, (threshold,))
+
+    users = cur.fetchall()
+
+    for (user_id,) in users:
+
+        try:
+
+            if random.random() < 0.15:
+
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=proactive_emotional_checkin()
+                )
+
+        except Exception:
+            pass
+
+    cur.close()
+    conn.close()
+
+
 # =============================
 # START BOT
 # =============================
@@ -344,6 +384,13 @@ def start():
     app.job_queue.run_daily(
         late_night_checkin,
         time=time(hour=23, minute=30)
+    )
+
+    # emotional followup check-in
+    app.job_queue.run_repeating(
+        emotional_followup,
+        interval=43200,
+        first=300
     )
 
     print("Telegram bot running...")
