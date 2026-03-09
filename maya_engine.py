@@ -387,8 +387,8 @@ Conversation:
 def call_llm(messages):
 
     models = [
-        "meta-llama/llama-3.2-3b-instruct:free",
-        "arcee-ai/trinity-large-preview:free"    
+        "arcee-ai/trinity-large-preview:free", 
+        "meta-llama/llama-3.2-3b-instruct:free"
     ]
 
     for model in models:
@@ -589,7 +589,8 @@ def generate_reply(platform, user_id, name, user_message):
 
         greetings = ["hi", "hello", "hey", "hii"]
     
-        if msg_lower.startswith(tuple(greetings)) and message_count == 0:
+        first_word = msg_lower.split()[0] if msg_lower.split() else ""
+        if first_word in greetings and message_count == 0:
     
             return random.choice([
                 "Hey 🙂 kaisa chal raha hai aaj?",
@@ -662,7 +663,7 @@ def generate_reply(platform, user_id, name, user_message):
     
     memory_callback = ""
     
-    if memories and random.random() < 0.18:   # ~18% chance
+    if memories and len(recent_messages) > 4 and random.random() < 0.15:  # ~15% chance
     
         memory = random.choice(memories)
     
@@ -725,19 +726,19 @@ def generate_reply(platform, user_id, name, user_message):
 
 
     reply = call_llm(messages)
+
+    if not reply:
+        reply = "hmm… ek sec, phir se bolo?"
     
     # keep max 2 sentences
     reply = reply.split("\n")[0]
-    if len(reply) > 220:
-        reply = reply[:220]
 
-    if not reply:
-        reply = "Hmm… thoda network issue lag raha hai. Phir se bolo?"
+  
 
     # remove repeated blank lines
     reply = "\n".join([l for l in reply.split("\n") if l.strip()])
 
-    reply = reply.strip()
+    reply = reply.strip(".")
 
     # small human texting randomness
     if random.random() < 0.25:
