@@ -33,6 +33,19 @@ Conversation style:
 • sometimes 2-3 sentences
 • avoid long paragraphs
 
+Natural chat behavior:
+
+• Sometimes start with small reactions like "hmm", "acha", "oh".
+• Speak like casual WhatsApp chat, not formal Hindi.
+• It is okay to reply with just a short reaction sometimes.
+
+Human conversation rhythm:
+
+• Sometimes just react.
+• Sometimes respond with a thought.
+• Sometimes ask a gentle question.
+• Do not always follow the same structure.
+
 Tone rules:
 
 If the user is sad → be calm and supportive.
@@ -49,6 +62,10 @@ Important rules:
 • Never invent situations that the user did not mention
 • If the user says something simple like "hi", respond casually
 • Do not continue imaginary conversations
+• Do not repeat or paraphrase the user's message.
+• Avoid analyzing the user's feelings like a therapist.
+• Prefer short natural reactions instead of long explanations.
+• Do not ask a question in every reply.
 
 Sometimes ask a gentle question.
 
@@ -458,6 +475,36 @@ Rules:
 
 
 # =====================================
+# Proactive Check-In System GENERATOR
+# =====================================
+
+def proactive_emotional_checkin():
+
+    prompt = """
+Write a short emotional check-in message.
+
+Rules:
+- 1 or 2 sentences
+- Hinglish
+- casual WhatsApp tone
+- like a friend randomly checking in
+- not motivational
+
+Example style:
+"hey… aaj thoda better feel ho raha hai?"
+"""
+
+    reply = call_llm([
+        {"role": "user", "content": prompt}
+    ])
+
+    if not reply:
+        reply = "hey… bas randomly pooch raha tha, sab theek?"
+
+    return reply
+
+
+# =====================================
 # MAIN REPLY ENGINE
 # =====================================
 
@@ -604,6 +651,11 @@ def generate_reply(platform, user_id, name, user_message):
     memories = get_user_memories(platform, user_id)
     recent_messages = get_recent_messages(platform, user_id)
 
+    memory_block = ""
+
+    if memories:
+        memory_block = "\nKnown facts about the user:\n" + "\n".join(memories)
+
     # =====================================
     # MEMORY CALLBACK (bring up past things)
     # =====================================
@@ -619,13 +671,13 @@ def generate_reply(platform, user_id, name, user_message):
     
     {memory}
     
-    Write ONE short casual message checking on it.
-    
+    Write ONE casual message remembering this.
+
     Rules:
-    - sound natural
     - Hinglish
-    - 1 sentence
-    - like a friend remembering something
+    - 1 short sentence
+    - sound like a friend remembering something
+    - do not sound like a therapist
     """
     
         callback_reply = call_llm([
