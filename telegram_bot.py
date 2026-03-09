@@ -109,7 +109,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # TYPING SIMULATION
     # -----------------------------
 
-    typing_delay = min(len(reply) / 20, 3)
+    typing_delay = random.uniform(1.5, 3.5)
 
     for _ in range(int(typing_delay)):
 
