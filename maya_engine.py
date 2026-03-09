@@ -730,19 +730,27 @@ def generate_reply(platform, user_id, name, user_message):
     if not reply:
         reply = "hmm… ek sec, phir se bolo?"
     
-    # keep max 2 sentences
-    reply = reply.split("\n")[0]
-
-  
-
-    # remove repeated blank lines
+    # normalize whitespace
+    reply = reply.strip()
+    
+    # remove empty lines
     reply = "\n".join([l for l in reply.split("\n") if l.strip()])
-
-    reply = reply.strip(".")
+    
+    # keep only first line
+    reply = reply.split("\n")[0]
+    
+    # limit message length
+    if len(reply) > 220:
+        reply = reply[:220]
+    
+    # remove trailing dot for natural chat
+    reply = reply.rstrip(".!?")
 
     # small human texting randomness
     if random.random() < 0.25:
         reply += random.choice([" 🙂", " hmm", " acha", " ya", " oh"])
+
+    reply = reply.strip()
         
     save_message(platform, user_id, "user", user_message)
     save_message(platform, user_id, "assistant", reply)
