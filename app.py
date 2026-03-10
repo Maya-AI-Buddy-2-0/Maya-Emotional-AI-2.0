@@ -3,7 +3,7 @@ import threading
 import asyncio
 import razorpay
 import json
-import whatsapp_webhook
+from whatsapp_webhook import register_whatsapp_routes
 from datetime import datetime, timedelta
 
 from config import (
@@ -23,6 +23,7 @@ app = Flask(__name__)
 # Initialize DB
 init_db()
 
+register_whatsapp_routes(app)
 
 # -----------------------------
 # Health Check Route
