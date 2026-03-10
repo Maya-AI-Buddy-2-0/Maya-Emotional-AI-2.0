@@ -4,7 +4,6 @@ import time
 import logging
 
 from flask import request, jsonify
-from app import app
 
 from config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_TOKEN, PHONE_NUMBER_ID
 from maya_engine import generate_reply
@@ -12,26 +11,6 @@ from maya_engine import generate_reply
 
 logging.basicConfig(level=logging.INFO)
 
-
-# ==========================================
-# VERIFY WHATSAPP WEBHOOK
-# ==========================================
-
-@app.route("/webhook", methods=["GET"])
-def verify_whatsapp():
-
-    verify_token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if verify_token == WHATSAPP_VERIFY_TOKEN:
-        return challenge, 200
-
-    return "Verification failed", 403
-
-
-# ==========================================
-# SEND MESSAGE TO WHATSAPP
-# ==========================================
 
 def send_whatsapp_message(user_id, message):
 
@@ -52,10 +31,6 @@ def send_whatsapp_message(user_id, message):
     requests.post(url, headers=headers, json=payload)
 
 
-# ==========================================
-# PARSE INCOMING WHATSAPP MESSAGE
-# ==========================================
-
 def parse_whatsapp_message(data):
 
     try:
@@ -70,28 +45,15 @@ def parse_whatsapp_message(data):
         message = value["messages"][0]
 
         user_id = message["from"]
-
         message_type = message.get("type")
 
         text = None
 
-        # ----------------------------
-        # TEXT MESSAGE
-        # ----------------------------
-
         if message_type == "text":
             text = message["text"]["body"]
 
-        # ----------------------------
-        # BUTTON REPLY
-        # ----------------------------
-
         elif message_type == "button":
             text = message["button"]["text"]
-
-        # ----------------------------
-        # INTERACTIVE (LIST / BUTTON)
-        # ----------------------------
 
         elif message_type == "interactive":
 
@@ -103,16 +65,8 @@ def parse_whatsapp_message(data):
             elif interactive["type"] == "list_reply":
                 text = interactive["list_reply"]["title"]
 
-        # ----------------------------
-        # IMAGE WITH CAPTION
-        # ----------------------------
-
         elif message_type == "image":
             text = message["image"].get("caption", "image")
-
-        # ----------------------------
-        # FALLBACK
-        # ----------------------------
 
         if not text:
             text = "..."
@@ -121,44 +75,56 @@ def parse_whatsapp_message(data):
 
     except Exception as e:
 
-        logging.error("Message parsing error: %s", e)
+        logging.error("Parsing error: %s", e)
         return None, None, None
 
 
-# ==========================================
-# RECEIVE WHATSAPP MESSAGE
-# ==========================================
+# ---------------------------------
+# REGISTER ROUTES FUNCTION
+# ---------------------------------
 
-@app.route("/webhook", methods=["POST"])
-def receive_whatsapp():
+def register_whatsapp_routes(app):
 
-    data = request.json
+    @app.route("/webhook", methods=["GET"])
+    def verify_whatsapp():
 
-    user_id, name, message = parse_whatsapp_message(data)
+        verify_token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    if not user_id or not message:
-        return jsonify({"status": "ignored"}), 200
+        if verify_token == WHATSAPP_VERIFY_TOKEN:
+            return challenge, 200
 
-    logging.info(f"WhatsApp message from {user_id}: {message}")
+        return "Verification failed", 403
 
-    try:
 
-        reply = generate_reply(
-            "whatsapp",
-            user_id,
-            name,
-            message
-        )
+    @app.route("/webhook", methods=["POST"])
+    def receive_whatsapp():
 
-    except Exception as e:
+        data = request.json
 
-        logging.error(e)
-        reply = "Hmm… thoda issue aa gaya. Ek baar phir bolo?"
+        user_id, name, message = parse_whatsapp_message(data)
 
-    # simulate human delay
-    delay = random.uniform(1.5, 3.5)
-    time.sleep(delay)
+        if not user_id:
+            return jsonify({"status": "ignored"}), 200
 
-    send_whatsapp_message(user_id, reply)
+        logging.info(f"WhatsApp message: {message}")
 
-    return jsonify({"status": "ok"}), 200
+        try:
+
+            reply = generate_reply(
+                "whatsapp",
+                user_id,
+                name,
+                message
+            )
+
+        except Exception as e:
+
+            logging.error(e)
+            reply = "Hmm… thoda issue aa gaya. Ek baar phir bolo?"
+
+        time.sleep(random.uniform(1.5, 3.5))
+
+        send_whatsapp_message(user_id, reply)
+
+        return jsonify({"status": "ok"}), 200
